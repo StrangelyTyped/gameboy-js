@@ -90,6 +90,7 @@ class MMU {
     #romBankCount;
     #ramBankCount;
     #gpu;
+    #joypad;
     constructor(){
         this.#banks = {
             bootRom: makeBuffer(0x100),
@@ -116,156 +117,169 @@ class MMU {
             wram2: 1,
         };
         this.memory = new Proxy(this, {
-            get: (target, k) => {
-                k &= 0xFFFF;
-                switch(k & 0xF000){
-                    case 0x0000:
-                        if(k < 0x100 && this.#activeBanks.boot){
-                            return this.#banks.bootRom[k];
-                        }
-                    case 0x1000:
-                    case 0x2000:
-                    case 0x3000:
-                        return this.#banks.rom[this.#activeBanks.rom][k];
-                    case 0x4000:
-                    case 0x5000:
-                    case 0x6000:
-                    case 0x7000:
-                        return this.#banks.rom[this.#activeBanks.rom2][k - 0x4000];
-                    case 0x8000:
-                    case 0x9000:
-                        return this.#banks.vram[this.#activeBanks.vram][k - 0x8000];
-                    case 0xA000:
-                    case 0xB000:
-                        return this.#banks.nvEram[this.#activeBanks.nvEram][k - 0xA000];
-                    case 0xC000:
-                        return this.#banks.wram[this.#activeBanks.wram][k - 0xC000];
-                    case 0xD000:
-                        return this.#banks.wram[this.#activeBanks.wram2][k - 0xD000];
-                    case 0xE000:
-                        return this.#banks.wram[this.#activeBanks.wram][k - 0xE000];
-                    case 0xF000:
-                        switch(k & 0x0F00){
-                            case 0x0E00:
-                                return this.#banks.oam[k - 0xFE00];
-                            case 0x0F00:
-                                if(k === 0xFFFF){
-                                    //interrupt enable register
-                                    return this.#banks.interruptEnableRegister;
-                                }else if(k >= 0xFF80){
-                                    //HRAM
-                                    return this.#banks.hram[k - 0xFF80];
-                                }else{
-                                    //IO Registers
-                                    // TODO
-                                    if(k === 0xFF0F){
-                                        // interrupt flag register
-                                        return this.#banks.interruptFlagRegister;
-                                    } else if(k >= 0xFF40 && k <= 0xFF4B){
-                                        return this.#gpu.readRegister(k);
-                                    } else if(k >= 0xFF30 && k <= 0xFF3F){
-                                        //wave ram
-                                        return 0;
-                                    } else if(k >= 0xFF10 && k <= 0xFF26){
-                                        //Sound device, ignore for now
-                                    } else if(k >= 0xFF04 && k <= 0xFF07){
-                                        console.warn("Read from unimplemented timer hardware", k);
-                                        return 0x80;
-                                    } else if(k >= 0xFF01 && k <= 0xFF02){
-                                        // Serial transfer, ignore for now
-                                    } else if(k ===  0xFF00){
-                                        // joypad, ignore for now
-                                        return 0x0F;
-                                    } else if(k === 0xFF7F){
-                                        // No idea what this is - not documented
-                                    }else{
-                                        console.warn("Unhandled IO Register read", k);
-                                    }
-                                }
-                                return 0;
-                            default:
-                                return this.#banks.wram[this.#activeBanks.wram2][k - 0xF000];
-                        }
-                }
-            },
+            get: (target, k) => this.read(k),
             set: (target, k, v) => {
-                k &= 0xFFFF;
-                switch(k & 0xF000){
-                    case 0x0000:
-                    case 0x1000:
-                    case 0x2000:
-                    case 0x3000:
-                    case 0x4000:
-                    case 0x5000:
-                    case 0x6000:
-                    case 0x7000:
-                        this.#mbc.romWrite(k, v);
-                        break;
-                    case 0x8000:
-                    case 0x9000:
-                        this.#banks.vram[this.#activeBanks.vram][k - 0x8000] = v;
-                        break;
-                    case 0xA000:
-                    case 0xB000:
-                        this.#banks.nvEram[this.#activeBanks.nvEram][k - 0xA000] = v;
-                        break;
-                    case 0xC000:
-                        this.#banks.wram[this.#activeBanks.wram][k - 0xC000] = v;
-                        break;
-                    case 0xD000:
-                        this.#banks.wram[this.#activeBanks.wram2][k - 0xD000] = v;
-                        break;
-                    case 0xE000:
-                        this.#banks.wram[this.#activeBanks.wram][k - 0xE000] = v;
-                        break;
-                    case 0xF000:
-                        switch(k & 0x0F00){
-                            case 0x0E00:
-                                this.#banks.oam[k - 0xFE00] = v;
-                                break;
-                            case 0x0F00:
-                                if(k === 0xFFFF){
-                                    //interrupt enable register
-                                    this.#banks.interruptEnableRegister = v;
-                                } if(k >= 0xFF80){
-                                    //HRAM
-                                    this.#banks.hram[k - 0xFF80] = v;
-                                }else{
-                                    //IO Registers
-                                    if(k >= 0xFF40 && k <= 0xFF4B){
-                                        this.#gpu.writeRegister(k, v);
-                                    } else if(k >= 0xFF30 && k <= 0xFF3F){
-                                        //wave ram
-                                    } else if(k === 0xFF0F){
-                                        // interrupt flag register
-                                        this.#banks.interruptFlagRegister = v;
-                                    } else if(k >= 0xFF10 && k <= 0xFF26){
-                                        //Sound device, ignore for now
-                                    } else if(k >= 0xFF04 && k <= 0xFF07){
-                                        console.warn("write to unimplemented timer hardware", k, v);
-                                    } else if(k >= 0xFF01 && k <= 0xFF02){
-                                        // Serial transfer, ignore for now
-                                    } else if(k ===  0xFF00){
-                                        // joypad, ignore for now
-                                    } else if(k === 0xFF50){
-                                        console.warn("Boot rom unmap");
-                                        this.#activeBanks.boot = false;
-                                    } else if(k === 0xFF7F){
-                                        // No idea what this is - not documented
-                                    }else{
-                                        console.warn("Unhandled IO Register write", k, v);
-                                    }
-                                }
-                                break;
-                            default:
-                                this.#banks.wram[this.#activeBanks.wram2][k - 0xF000] = v;
-                        }
-                }
+                this.write(k, v);
                 return true;
-            },
+            }
         });
         this.setCartridgeType(0, 0, 0);
     }
+
+    read(k){
+        k &= 0xFFFF;
+        switch(k & 0xF000){
+            case 0x0000:
+                if(k < 0x100 && this.#activeBanks.boot){
+                    return this.#banks.bootRom[k];
+                }
+            case 0x1000:
+            case 0x2000:
+            case 0x3000:
+                return this.#banks.rom[this.#activeBanks.rom][k];
+            case 0x4000:
+            case 0x5000:
+            case 0x6000:
+            case 0x7000:
+                return this.#banks.rom[this.#activeBanks.rom2][k - 0x4000];
+            case 0x8000:
+            case 0x9000:
+                return this.#banks.vram[this.#activeBanks.vram][k - 0x8000];
+            case 0xA000:
+            case 0xB000:
+                return this.#banks.nvEram[this.#activeBanks.nvEram][k - 0xA000];
+            case 0xC000:
+                return this.#banks.wram[this.#activeBanks.wram][k - 0xC000];
+            case 0xD000:
+                return this.#banks.wram[this.#activeBanks.wram2][k - 0xD000];
+            case 0xE000:
+                return this.#banks.wram[this.#activeBanks.wram][k - 0xE000];
+            case 0xF000:
+                switch(k & 0x0F00){
+                    case 0x0E00:
+                        return this.#banks.oam[k - 0xFE00];
+                    case 0x0F00:
+                        if(k === 0xFFFF){
+                            //interrupt enable register
+                            return this.#banks.interruptEnableRegister;
+                        }else if(k >= 0xFF80){
+                            //HRAM
+                            return this.#banks.hram[k - 0xFF80];
+                        }else{
+                            //IO Registers
+                            // TODO
+                            if(k === 0xFF0F){
+                                // interrupt flag register
+                                return this.#banks.interruptFlagRegister;
+                            } else if(k >= 0xFF40 && k <= 0xFF4B){
+                                return this.#gpu.readRegister(k);
+                            } else if(k >= 0xFF30 && k <= 0xFF3F){
+                                //wave ram
+                                return 0;
+                            } else if(k >= 0xFF10 && k <= 0xFF26){
+                                //Sound device, ignore for now
+                            } else if(k >= 0xFF04 && k <= 0xFF07){
+                                console.warn("Read from unimplemented timer hardware", k);
+                                return 0x80;
+                            } else if(k >= 0xFF01 && k <= 0xFF02){
+                                // Serial transfer, ignore for now
+                            } else if(k ===  0xFF00){
+                                // joypad
+                                if(this.#joypad){
+                                    return this.#joypad.readRegister(k);
+                                }
+                                return 0x8;
+                            } else if(k === 0xFF7F){
+                                // No idea what this is - not documented
+                            }else{
+                                console.warn("Unhandled IO Register read", k);
+                            }
+                        }
+                        return 0;
+                    default:
+                        return this.#banks.wram[this.#activeBanks.wram2][k - 0xF000];
+                }
+        }
+    }
+
+    write(k, v) {
+        k &= 0xFFFF;
+        switch(k & 0xF000){
+            case 0x0000:
+            case 0x1000:
+            case 0x2000:
+            case 0x3000:
+            case 0x4000:
+            case 0x5000:
+            case 0x6000:
+            case 0x7000:
+                this.#mbc.romWrite(k, v);
+                break;
+            case 0x8000:
+            case 0x9000:
+                this.#banks.vram[this.#activeBanks.vram][k - 0x8000] = v;
+                break;
+            case 0xA000:
+            case 0xB000:
+                this.#banks.nvEram[this.#activeBanks.nvEram][k - 0xA000] = v;
+                break;
+            case 0xC000:
+                this.#banks.wram[this.#activeBanks.wram][k - 0xC000] = v;
+                break;
+            case 0xD000:
+                this.#banks.wram[this.#activeBanks.wram2][k - 0xD000] = v;
+                break;
+            case 0xE000:
+                this.#banks.wram[this.#activeBanks.wram][k - 0xE000] = v;
+                break;
+            case 0xF000:
+                switch(k & 0x0F00){
+                    case 0x0E00:
+                        this.#banks.oam[k - 0xFE00] = v;
+                        break;
+                    case 0x0F00:
+                        if(k === 0xFFFF){
+                            //interrupt enable register
+                            this.#banks.interruptEnableRegister = v;
+                        } if(k >= 0xFF80){
+                            //HRAM
+                            this.#banks.hram[k - 0xFF80] = v;
+                        }else{
+                            //IO Registers
+                            if(k >= 0xFF40 && k <= 0xFF4B){
+                                this.#gpu.writeRegister(k, v);
+                            } else if(k >= 0xFF30 && k <= 0xFF3F){
+                                //wave ram
+                            } else if(k === 0xFF0F){
+                                // interrupt flag register
+                                this.#banks.interruptFlagRegister = v;
+                            } else if(k >= 0xFF10 && k <= 0xFF26){
+                                //Sound device, ignore for now
+                            } else if(k >= 0xFF04 && k <= 0xFF07){
+                                console.warn("write to unimplemented timer hardware", k, v);
+                            } else if(k >= 0xFF01 && k <= 0xFF02){
+                                // Serial transfer, ignore for now
+                            } else if(k ===  0xFF00){
+                                // joypad
+                                if(this.#joypad){
+                                    this.#joypad.writeRegister(k, v);
+                                }
+                            } else if(k === 0xFF50){
+                                console.warn("Boot rom unmap");
+                                this.#activeBanks.boot = false;
+                            } else if(k === 0xFF7F){
+                                // No idea what this is - not documented
+                            }else{
+                                console.warn("Unhandled IO Register write", k, v);
+                            }
+                        }
+                        break;
+                    default:
+                        this.#banks.wram[this.#activeBanks.wram2][k - 0xF000] = v;
+                }
+        }
+    }
+
     setCartridgeType(cartTypeId, romTypeId, ramTypeId){
         switch(romTypeId){
             case 0x00:
@@ -353,6 +367,9 @@ class MMU {
     mapGpuMemory(gpu){
         gpu.mapMemory(this.memory);
         this.#gpu = gpu;
+    }
+    mapJoypad(joypad){
+        this.#joypad = joypad;
     }
 }
 

@@ -1,6 +1,7 @@
 import bios from "./gb_bios.mjs";
-import mario from './mario1.mjs';
+import mario from './tetris.mjs';
 
+import JoypadKeyboard from "./joypad-keyboard.js";
 import mmu from "./mmu.js";
 import gpu from "./graphics.js";
 
@@ -15,6 +16,9 @@ mmu.loadCartridge(mario);
 gpu.setCanvas(document.getElementById("screen"));
 mmu.mapGpuMemory(gpu);
 
+const joypad = new JoypadKeyboard();
+mmu.mapJoypad(joypad);
+
 const frameTime = document.getElementById("frametime");
 const fps = document.getElementById("fpsCounter");
 
@@ -26,6 +30,7 @@ gpu.onVblank(() => {
     fps.innerText = browserFps.getCount() + "/" + gpuFps.getCount();
 })
 cpu.registerGpuCallbacks(gpu);
+cpu.registerJoypadCallbacks(joypad);
 
 function run(elapsed = 0){
     const tickStart = performance.now();

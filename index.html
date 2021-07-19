@@ -1,13 +1,116 @@
 <!doctype html>
 <html>
 <head>
+    <style> 
+.controls-container {
+    width: 250px;
+    height: 250px;
+  display: flex;
+  flex-direction:column;
+  background-color:  #BFBEBA;
+  border-radius: 10%;
+  margin-left: 5%;
+}
+
+.main-controls {
+  margin-top: 5%;
+  flex:1;
+  display:flex;
+}
+
+.d-pad {
+  flex:1;
+  display: flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+}
+
+.d-pad-left-right {
+    display: flex;
+}
+
+.up {
+  height: 20px;
+  width: 20px;
+  background: #555;
+}
+.left-right {
+  height: 20px;
+  width: 30px;
+  background: #555;
+}
+.down {
+  height: 20px;
+  width: 20px;
+  background: #555;
+}
+
+.a-b {
+  flex:1;
+  display:flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-right: 5%;
+}
+
+.a-button, .b-button {
+  background: #900446;
+  height: 30px;
+  width: 30px;
+  border-radius: 100%;
+  margin: 5%;
+}
+
+.a-button {
+  transform: translatey(-10px);
+}
+
+.sub-controls{
+  flex:1;
+  display: flex;
+  justify-content: center;
+}
+
+.select, .start {
+  width: 40px;
+  height: 10px;
+  background: #545761;
+  margin: 5% 0% 0% 0%;
+  border-radius: 10%;
+  transform: rotate(-42deg);
+}
+    </style>
 </head>
 <body>
     <div style="width: 800px; display: flex; justify-content: space-between">
-    <div>Frame Time: <span id="frametime">?</span>ms</div>
-    <div style="text-align: right">FPS: <span id="fpsCounter">?</span></div>
+        <div>Frame Time: <span id="frametime">?</span>ms</div>
+        <div style="text-align: right">FPS: <span id="fpsCounter">?</span>#<span id="joypadState"></span></div>
     </div>
-<canvas style="border: 1px solid black; width: 800px; height: 720px;" width="160" height="144" id="screen"></canvas>
-<script type="module" src="main.js"></script>
+    <div style="display: flex">
+        <canvas style="border: 1px solid black; width: 800px; height: 720px;" width="160" height="144" id="screen"></canvas>
+        <div class="controls-container" style="display: none">
+            <div class="main-controls">
+                <div class="d-pad">
+                    <button id="joypad-up" class="up" title="Up"></button>
+                    <div class="d-pad-left-right">
+                        <button id="joypad-left" class="left-right" title="Left"></button>
+                        <button id="joypad-right" class="left-right" title="Right"></button>
+                    </div>
+                    <button id="joypad-down" class="down" title="Down"></button>
+                </div>
+                <div class="a-b">
+                    <button id="joypad-b" class="b-button" title="B"></button>
+                    <button id="joypad-a" class="a-button" title="A"></button>
+                </div>
+            </div>
+            <div class="sub-controls">
+                <button id="joypad-select" class="select" title="Select"></button>
+                <button id="joypad-start" class="start" title="Start"></button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="main.js"></script>
 </body>
 </html>

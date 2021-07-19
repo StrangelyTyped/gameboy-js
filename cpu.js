@@ -1003,6 +1003,13 @@ class CPU {
             }
         });
     }
+    registerJoypadCallbacks(joypad){
+        joypad.onButtonDown((buttonInterruptEnabled) => {
+            if(buttonInterruptEnabled && this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x10){
+                memory[0xFF0F] |= 0x10;
+            }
+        })
+    }
 }
 
 export default new CPU();
