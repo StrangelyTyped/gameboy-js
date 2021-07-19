@@ -237,6 +237,8 @@ function tick(cpuState){
                 case 0x31:
                     registers.SP = immediate;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             break;
         }
@@ -263,6 +265,8 @@ function tick(cpuState){
                 case 0x77:
                     memory[registers.HL] = registers[getStandardRegisterLow3(opcode)];
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             break;
         case primaryGroupNames.incrementRegister16:
@@ -280,6 +284,8 @@ function tick(cpuState){
                 case 0x33:
                     registers.SP++;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             break;
         }
@@ -347,6 +353,8 @@ function tick(cpuState){
                 case 0x39:
                     prev = registers.SP;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             const result = registers.HL + prev;
             registers.HL = result & 0xFFFF;
@@ -378,6 +386,8 @@ function tick(cpuState){
                 case 0x7E:
                     registers[getStandardRegisterOther(opcode)] = memory[registers.HL];
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             break;
         case primaryGroupNames.decrementRegister16:
@@ -395,7 +405,8 @@ function tick(cpuState){
                 case 0x3B:
                     registers.SP = registers.SP ? registers.SP - 1 : 0xFFFF;
                     break;
-                
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             break;
         }
@@ -448,6 +459,8 @@ function tick(cpuState){
                 case 0x38:
                     takeBranch = registers.flagC;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             if(takeBranch){
                 registers.PC += offset;
@@ -517,23 +530,32 @@ function tick(cpuState){
             registers.flagC = (result > 0xFF);
             break;
         }
-        // case addCarryRegister8ToAccum
+        case primaryGroupNames.addCarryRegister8ToAccum:
+        {
+            const result = registers.A + registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0);
+            registers.A = result & 0xFF;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false;
+            registers.flagC = (result > 0xFF);
+            break;
+        }
         // case addCarryPtrToAccum
         case primaryGroupNames.subRegister8FromAccum:
         {
             const result = registers.A - registers[getStandardRegisterLow3(opcode)];
-            registers.A = result;
+            registers.A = (result < 0 ? result + 0x100 : result);
             registers.flagZ = (result === 0);
             registers.flagN = true;
             registers.flagH = false;
-            registers.flagC = false;
+            registers.flagC = (result < 0);
             break;
         }
         case primaryGroupNames.subPtrFromAccum:
         {
             const prev = registers.A;
             const result = prev - memory[registers.HL];
-            registers.A = result < 0 ? result + 0xFF : result;
+            registers.A = (result < 0 ? result + 0x100 : result);
             registers.flagZ = (result === 0);
             registers.flagN = true;
             registers.flagH = false;
@@ -552,7 +574,16 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        // case andPtrWithAccum
+        case primaryGroupNames.andPtr8WithAccum:
+        {
+            const result = registers.A & memory[registers.HL];
+            registers.A = result;
+            registers.flagZ = result === 0;
+            registers.flagC = false;
+            registers.flagH = true;
+            registers.flagN = false;
+            break;
+        }
         case primaryGroupNames.xorRegister8WithAccum:
         {
             const result = registers.A ^ registers[getStandardRegisterLow3(opcode)];
@@ -599,7 +630,7 @@ function tick(cpuState){
             registers.flagZ = result === 0;
             registers.flagN = true;
             registers.flagH = false; //TODO
-            registers.flagC = false;
+            registers.flagC = (result < 0);
             break;
         }
         case primaryGroupNames.comparePtrWithAccum:
@@ -608,7 +639,7 @@ function tick(cpuState){
             registers.flagZ = result === 0;
             registers.flagN = true;
             registers.flagH = false; //TODO
-            registers.flagC = false;
+            registers.flagC = (result < 0);
             break;
         }
         case primaryGroupNames.conditionalReturnFlag:
@@ -627,6 +658,8 @@ function tick(cpuState){
                 case 0xD8:
                     takeBranch = registers.flagC;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             if(takeBranch){
                 registers.PC = memoryRead16(registers.SP);
@@ -667,12 +700,14 @@ function tick(cpuState){
                 case 0xD2:
                     takeBranch = !registers.flagC;
                     break;
-                case 0xCa:
+                case 0xCA:
                     takeBranch = registers.flagZ;
                     break;
-                case 0xDa:
+                case 0xDA:
                     takeBranch = registers.flagC;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             const jumpTarget = memoryRead16(registers.PC);
             registers.PC += 2;
@@ -703,6 +738,8 @@ function tick(cpuState){
                 case 0xDC:
                     takeBranch = registers.flagC;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             const func = memoryRead16(registers.PC);
             registers.PC += 2;
@@ -733,6 +770,8 @@ function tick(cpuState){
                 case 0xF5:
                     data = registers.AF;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             memoryWrite16(registers.SP, data);
             break;
@@ -776,6 +815,8 @@ function tick(cpuState){
                 case 0xFF:
                     targetAddress = 0x38;
                     break;
+                default:
+                    console.warn("unexpected opcode", opcode);
             }
             registers.SP -= 2;
             memoryWrite16(registers.SP, registers.PC);
@@ -793,12 +834,14 @@ function tick(cpuState){
             cycleIncrement = extendedTick();
             break;
         case primaryGroupNames.callImmediate16:
+        {
             const func = memoryRead16(registers.PC);
             registers.PC += 2;
             registers.SP -= 2;
             memoryWrite16(registers.SP, registers.PC);
             registers.PC = func;
             break;
+        }
         case primaryGroupNames.addCarryImmediate8ToAccum:
         {
             const prev = memory[registers.PC++];
@@ -814,7 +857,7 @@ function tick(cpuState){
         {
             const prev = memory[registers.PC++];
             const result = registers.A - prev;
-            registers.A = (result < 0 ? 256 + result : result);
+            registers.A = (result < 0 ? result + 0x100 : result);
             registers.flagZ = (result === 0);
             registers.flagC = (result < 0);
             registers.flagN = true;
@@ -834,9 +877,9 @@ function tick(cpuState){
             const result = registers.A & immediate;
             registers.A = result;
             registers.flagZ = (result === 0);
-            registers.flagC = 0;
-            registers.flagN = 1;
-            registers.flagH = 0;
+            registers.flagC = false;
+            registers.flagN = true;
+            registers.flagH = false;
             break;
         }
         // case addImmediate8ToStackPtr
@@ -902,7 +945,7 @@ function tick(cpuState){
             registers.flagZ = (result === 0);
             registers.flagN = true;
             registers.flagH = false; // TODO: verify
-            registers.flagC = false;
+            registers.flagC = (result < 0);
             break;
         }
         default:

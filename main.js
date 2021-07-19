@@ -1,5 +1,5 @@
 import bios from "./gb_bios.mjs";
-import mario from './cputest-06.mjs';
+import mario from './mario1.mjs';
 
 import mmu from "./mmu.js";
 import gpu from "./graphics.js";

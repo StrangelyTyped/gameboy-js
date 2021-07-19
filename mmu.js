@@ -293,7 +293,7 @@ class MMU {
                 console.warn("Unknown ROM type ID", romTypeId);
         }
         while(this.#banks.rom < this.#romBankCount){
-            this.#banks.rom.push(makeBuffer(0x4000));
+            this.#banks.rom.push(makeBuffer(0x4000).fill(0xFF));
         }
         switch(ramTypeId){
             case 0x00:
