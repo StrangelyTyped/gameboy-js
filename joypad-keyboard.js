@@ -16,7 +16,7 @@ export default class JoypadKeyboard extends JoypadBase {
     constructor(){
         super();
         document.onkeydown = (e) => {
-            if(keyMapping.hasOwnProperty(e.code)){
+            if(!e.repeat && keyMapping.hasOwnProperty(e.code)){
                 this.buttonDown(keyMapping[e.code]);
                 e.preventDefault();
                 e.stopPropagation();

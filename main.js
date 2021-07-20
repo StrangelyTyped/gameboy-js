@@ -1,5 +1,5 @@
 import bios from "./gb_bios.mjs";
-import mario from './tetris.mjs';
+import rom from './mario1.mjs';
 
 import JoypadKeyboard from "./joypad-keyboard.js";
 import mmu from "./mmu.js";
@@ -11,7 +11,7 @@ import { FpsCounter } from "./utils.js"
 
 
 mmu.mapBootRom(bios);
-mmu.loadCartridge(mario);
+mmu.loadCartridge(rom);
 
 gpu.setCanvas(document.getElementById("screen"));
 mmu.mapGpuMemory(gpu);

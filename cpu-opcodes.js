@@ -28,7 +28,7 @@ const opcodeGroups = [
     new OpcodeGroup("relativeJumpSignedImmediate8", 2, 12, [0x18]),
     new OpcodeGroup("rotateRightCarry", 1, 4, [0x1F]),
     new OpcodeGroup("relativeJumpFlagSignedImmediate8", 2, [12, 8], [0x20, 0x28, 0x30, 0x38]),
-        new OpcodeGroup("DAA", 1, 4, [0x27]),
+    new OpcodeGroup("bcdAdjust", 1, 4, [0x27]),
     new OpcodeGroup("bitwiseComplementAccum", 1, 4, [0x2F]),
     new OpcodeGroup("incrementPtr", 1, 12, [0x34]),
     new OpcodeGroup("decrementPtr", 1, 12, [0x35]),
