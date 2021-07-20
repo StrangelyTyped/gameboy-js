@@ -1,4 +1,3 @@
-import mmu from "./mmu.js";
 import {uint8ToInt8} from "./memory-utils.js";
 
 const registerNames = {
@@ -44,20 +43,23 @@ function buildPaletteMap(palette){
     ];
 }
 
-class GraphicsPipeline {
+export default class GraphicsPipeline {
     #canvas;
     #imageData;
     #memory;
     #registerData;
-    #tickCounter;
-    #callbacks;
+    #tickCounter = 0;
+    #callbacks = {
+        lyc: [],
+        hblank: [],
+        vblank: [],
+        oam: [],
+    };
     #layerBuffers;
-    constructor(){
-        this.#tickCounter = 0;
+    constructor(canvasElem){
         this.#registerData = {
             control: 0,
             y: 0,
-            // scroll-related registers can be modified at any time but only kick in at end of scan line (mode 0)
             scrollX: 0,
             scrollY: 0,
             windowX: 0,
@@ -72,18 +74,16 @@ class GraphicsPipeline {
             interruptFlags: 0,
             mode: MODE_SEARCH_OAM,
         };
-        this.#callbacks = {
-            lyc: [],
-            hblank: [],
-            vblank: [],
-            oam: [],
-        };
         this.#layerBuffers = {
             bg: new Array(screenW).fill(0),
             win: new Array(screenW).fill(0),
             obj: new Array(screenW).fill(0),
             objFlags: new Array(screenW).fill(0),
         }
+
+        this.#canvas = canvasElem.getContext('2d');
+        this.#imageData = this.#canvas.createImageData(screenW, 1);
+        this.#imageData.data.fill(0xFF);
     }
     onLyc(callback){
         this.#callbacks.lyc.push(callback);
@@ -98,13 +98,6 @@ class GraphicsPipeline {
         this.#callbacks.hblank.push(callback);
     }
     
-    setCanvas(elem){
-        this.#canvas = elem.getContext('2d');
-        //this.#canvas.fillStyle = "rgba(0xFF, 0xFF, 0xFF, 0xFF)";
-        //this.#canvas.fillRect(0, 0, screenW, screenH);
-        this.#imageData = this.#canvas.createImageData(screenW, 1);
-        this.#imageData.data.fill(0xFF);
-    }
     mapMemory(memory){
         this.#memory = memory;
     }
@@ -169,7 +162,7 @@ class GraphicsPipeline {
                 // v is the source address high byte
                 // This is supposed to take 160 cycles but we'll see
                 const sourceBase = (v << 8);
-                for(let i = 0; i < 0x100; i++){
+                for(let i = 0; i < 0xA0; i++){
                     this.#memory[0xFE00 + i] = this.#memory[sourceBase + i];
                 }
                 break;
@@ -200,7 +193,7 @@ class GraphicsPipeline {
         const spritesForRow = [];
         const spriteHeight = (this.#registerData.control & 0x4 ? 16 : 8);
     
-        for(let i = 0; i < 0x100; i+=4){
+        for(let i = 0; i < 0xA0; i+=4){
             const spriteY = this.#memory[0xFE00 + i] - 16;
             if(spriteY <= y && y - spriteY < spriteHeight){
                 spritesForRow.push({
@@ -374,5 +367,3 @@ class GraphicsPipeline {
         }
     }
 }
-
-export default new GraphicsPipeline();

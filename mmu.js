@@ -91,6 +91,7 @@ class MMU {
     #ramBankCount;
     #gpu;
     #joypad;
+    #timer;
     constructor(){
         this.#banks = {
             bootRom: makeBuffer(0x100),
@@ -179,7 +180,9 @@ class MMU {
                             } else if(k >= 0xFF10 && k <= 0xFF26){
                                 //Sound device, ignore for now
                             } else if(k >= 0xFF04 && k <= 0xFF07){
-                                console.warn("Read from unimplemented timer hardware", k);
+                                if(this.#timer){
+                                    return this.#timer.readRegister(k);
+                                }
                                 return 0x80;
                             } else if(k >= 0xFF01 && k <= 0xFF02){
                                 // Serial transfer, ignore for now
@@ -256,7 +259,9 @@ class MMU {
                             } else if(k >= 0xFF10 && k <= 0xFF26){
                                 //Sound device, ignore for now
                             } else if(k >= 0xFF04 && k <= 0xFF07){
-                                console.warn("write to unimplemented timer hardware", k, v);
+                                if(this.#timer){
+                                    this.#timer.writeRegister(k, v);
+                                }
                             } else if(k >= 0xFF01 && k <= 0xFF02){
                                 // Serial transfer, ignore for now
                             } else if(k ===  0xFF00){
@@ -370,6 +375,9 @@ class MMU {
     }
     mapJoypad(joypad){
         this.#joypad = joypad;
+    }
+    mapTimer(timer){
+        this.#timer = timer;
     }
 }
 

@@ -1098,7 +1098,14 @@ class CPU {
             if(buttonInterruptEnabled && this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x10){
                 memory[0xFF0F] |= 0x10;
             }
-        })
+        });
+    }
+    registerTimerCallbacks(timer){
+        timer.onCounterOverflow(() => {
+            if(this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x4){
+                memory[0xFF0F] |= 0x4;
+            }
+        });
     }
 }
 

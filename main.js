@@ -2,8 +2,9 @@ import bios from "./gb_bios.mjs";
 import rom from './mario1.mjs';
 
 import JoypadKeyboard from "./joypad-keyboard.js";
+import Timer from "./timer.js";
 import mmu from "./mmu.js";
-import gpu from "./graphics.js";
+import GraphicsPipeline from "./graphics.js";
 
 import cpu from "./cpu.js";
 
@@ -13,25 +14,30 @@ import { FpsCounter } from "./utils.js"
 mmu.mapBootRom(bios);
 mmu.loadCartridge(rom);
 
-gpu.setCanvas(document.getElementById("screen"));
+const gpu = new GraphicsPipeline(document.getElementById("screen"));
 mmu.mapGpuMemory(gpu);
+cpu.registerGpuCallbacks(gpu);
 
 const joypad = new JoypadKeyboard();
 mmu.mapJoypad(joypad);
+cpu.registerJoypadCallbacks(joypad);
+
+const timer = new Timer();
+mmu.mapTimer(timer);
+cpu.registerTimerCallbacks(timer);
 
 const frameTime = document.getElementById("frametime");
 const fps = document.getElementById("fpsCounter");
 
-let cpuRemainder = 0;
 const browserFps = new FpsCounter();
 const gpuFps = new FpsCounter();
 gpu.onVblank(() => {
     gpuFps.update();
     fps.innerText = browserFps.getCount() + "/" + gpuFps.getCount();
 })
-cpu.registerGpuCallbacks(gpu);
-cpu.registerJoypadCallbacks(joypad);
 
+
+let cpuRemainder = 0;
 function run(elapsed = 0){
     const tickStart = performance.now();
     //console.log("Tick");
@@ -40,6 +46,7 @@ function run(elapsed = 0){
     while(targetCycles > 0){
         const elapsed = cpu.tick();
         gpu.tick(elapsed);
+        timer.tick(elapsed);
         targetCycles -= elapsed;
     }
     cpuRemainder = targetCycles;
