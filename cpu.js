@@ -579,8 +579,16 @@ function tick(cpuState){
         case primaryGroupNames.loadImmediate8ToPtr:
             memory[registers.HL] = memory[registers.PC++];
             break;
-        // case SCF
-        // case CCF
+        case primaryGroupNames.setCarryFlag: // SCF
+            registers.flagN = false;
+            registers.flagH = false;
+            registers.flagC = true;
+            break;
+        case primaryGroupNames.complementCarryFlag: // CCF
+            registers.flagN = false;
+            registers.flagH = false;
+            registers.flagC = !registers.flagC;
+            break;
         case primaryGroupNames.loadRegister8ToRegister8:
             registers[getStandardRegisterOther(opcode)] = registers[getStandardRegisterLow3(opcode)];
             break;
@@ -652,8 +660,28 @@ function tick(cpuState){
             registers.flagC = (diff < 0);
             break;
         }
-        // case subCarryRegister8FromAccum
-        // case subCarryPtrFromAccum
+        case primaryGroupNames.subCarryRegister8FromAccum: // SBC A,n
+        {
+            const diff = registers.A - (registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0));
+            const result = (diff < 0 ? diff + 0x100 : diff);
+            registers.A = result;
+            registers.flagZ = (result === 0);
+            registers.flagN = true;
+            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagC = (diff < 0);
+            break;
+        }
+        case primaryGroupNames.subCarryPtrFromAccum: // SBC A,n
+        {
+            const diff = registers.A - (memory[registers.HL] + (registers.flagC ? 1 : 0));
+            const result = (diff < 0 ? diff + 0x100 : diff);
+            registers.A = result;
+            registers.flagZ = (result === 0);
+            registers.flagN = true;
+            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagC = (diff < 0);
+            break;
+        }
         case primaryGroupNames.andRegister8WithAccum: // AND n
         {
             const result = registers.A & registers[getStandardRegisterLow3(opcode)];
@@ -954,7 +982,17 @@ function tick(cpuState){
             registers.flagH = 0; //TODO: set if no borrow from bit 4
             break;
         }
-        // case subCarryImmediate8FromAccum
+        case primaryGroupNames.subCarryImmediate8FromAccum: // SBC A,n
+        {
+            const diff = registers.A - (memory[registers.PC++] + (registers.flagC ? 1 : 0));
+            const result = (diff < 0 ? diff + 0x100 : diff);
+            registers.A = result;
+            registers.flagZ = (result === 0);
+            registers.flagN = true;
+            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagC = (diff < 0);
+            break;
+        }
         case primaryGroupNames.ioPortWriteImmediate8:
             memory[0xFF00 + memory[registers.PC++]] = registers.A;
             break;
