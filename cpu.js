@@ -361,7 +361,7 @@ function tick(cpuState){
             registers[register] = result;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = (false);
-            registers.flagH = (false); // TODO: set if carry from bit 3
+            registers.flagH = ((prev & 0xF) > (result & 0xF));
         
             break;
         }
@@ -374,7 +374,7 @@ function tick(cpuState){
             registers[register] = result;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = (true);
-            registers.flagH = (false); //TODO: set if no borrow from bit 4
+            registers.flagH = ((prev & 0xF) > (result & 0xF));
             break;
         }
         case primaryGroupNames.loadImmediate8ToRegister:
@@ -423,7 +423,7 @@ function tick(cpuState){
             const result = registers.HL + prev;
             registers.HL = result & 0xFFFF;
             registers.flagN = false;
-            registers.flagH = false;  //TODO: set if carry from bit 11
+            registers.flagH = (prev & 0xFFF) > (result & 0xFFF);
             registers.flagC = (result > 0xFFFF);
             break;
         }
@@ -562,7 +562,7 @@ function tick(cpuState){
             const result = prev + 1;
             memory[registers.HL] = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
-            registers.flagH = false; // TODO: set if carry from bit 3
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagN = false;
             break;
         }
@@ -572,7 +572,7 @@ function tick(cpuState){
             const result = prev > 0 ? prev - 1 : 0xFF;
             memory[registers.HL] = result;
             registers.flagZ = (result === 0);
-            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagN = true;
             break;
         }
@@ -599,11 +599,12 @@ function tick(cpuState){
         }
         case primaryGroupNames.addRegister8ToAccum:
         {
-            const result = registers.A + registers[getStandardRegisterLow3(opcode)]
+            const prev = registers.A;
+            const result = prev + registers[getStandardRegisterLow3(opcode)];
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
-            registers.flagH = false;  //TODO: set if carry from bit 3
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (result > 0xFF);
             break;
         }
@@ -614,71 +615,77 @@ function tick(cpuState){
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
-            registers.flagH = false; //TODO: set if carry from bit 3
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (result > 0xFF);
             break;
         }
         case primaryGroupNames.addCarryRegister8ToAccum: // ADC A,n
         {
-            const result = registers.A + registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0);
+            const prev = registers.A;
+            const result = prev + registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
-            registers.flagH = false; // TODO: set if carry from bit 3
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (result > 0xFF);
             break;
         }
         case primaryGroupNames.addCarryPtrToAccum: // ADC A, n
         {
-            const result = registers.A + memory[registers.HL] + (registers.flagC ? 1 : 0);
+            const prev = registers.A;
+            const result = prev + memory[registers.HL] + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
-            registers.flagH = false; // TODO: set if carry from bit 3
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (result > 0xFF);
             break;
         }
         case primaryGroupNames.subRegister8FromAccum: // SUB n
         {
-            const diff = registers.A - registers[getStandardRegisterLow3(opcode)];
+            const prev = registers.A;
+            const diff = prev - registers[getStandardRegisterLow3(opcode)];
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
         case primaryGroupNames.subPtrFromAccum: // SUB n
         {
-            const diff = registers.A - memory[registers.HL];
+            const prev = registers.A;
+            const diff = prev - memory[registers.HL];
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
         case primaryGroupNames.subCarryRegister8FromAccum: // SBC A,n
         {
-            const diff = registers.A - (registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0));
+            const prev = registers.A;
+            const diff = prev - (registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
         case primaryGroupNames.subCarryPtrFromAccum: // SBC A,n
         {
-            const diff = registers.A - (memory[registers.HL] + (registers.flagC ? 1 : 0));
+            const prev = registers.A;
+            const diff = prev - (memory[registers.HL] + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF)
             registers.flagC = (diff < 0);
             break;
         }
@@ -744,19 +751,21 @@ function tick(cpuState){
         }
         case primaryGroupNames.compareRegister8WithAccum: // CP n
         {
-            const result = registers.A - registers[getStandardRegisterLow3(opcode)];
+            const prev = registers.A;
+            const result = prev - registers[getStandardRegisterLow3(opcode)];
             registers.flagZ = result === 0;
             registers.flagN = true;
-            registers.flagH = false; //TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (result < 0);
             break;
         }
         case primaryGroupNames.comparePtrWithAccum: // CP n
         {
-            const result = registers.A - memory[registers.HL];
+            const prev = registers.A;
+            const result = prev - memory[registers.HL];
             registers.flagZ = result === 0;
             registers.flagN = true;
-            registers.flagH = false; //TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (result < 0);
             break;
         }
@@ -896,13 +905,13 @@ function tick(cpuState){
         }
         case primaryGroupNames.addImmediate8ToAccum: // ADD a,n
         {
-            const prev = memory[registers.PC++];
-            const result = registers.A + prev;
+            const prev = registers.A;
+            const result = prev + memory[registers.PC++];
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagC = (result > 0xFF);
             registers.flagN = 0;
-            registers.flagH = 0; //TODO: set if carry from bit 3
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             break;
         }
         case primaryGroupNames.reset:
@@ -962,34 +971,36 @@ function tick(cpuState){
         }
         case primaryGroupNames.addCarryImmediate8ToAccum: // ADC A,n
         {
-            const prev = memory[registers.PC++];
-            const result = registers.A + prev + (registers.flagC ? 1 : 0);
+            const prev = registers.A;
+            const result = prev + memory[registers.PC++] + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagC = (result > 0xFF);
             registers.flagN = false;
-            registers.flagH = 0; //TODO: set if carry from bit 3
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             break;
         }
         case primaryGroupNames.subImmediate8FromAccum: // SUB n
         {
-            const diff = registers.A - memory[registers.PC++];
+            const prev = registers.A;
+            const diff = prev - memory[registers.PC++];
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagC = (diff < 0);
             registers.flagN = true;
-            registers.flagH = 0; //TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             break;
         }
         case primaryGroupNames.subCarryImmediate8FromAccum: // SBC A,n
         {
-            const diff = registers.A - (memory[registers.PC++] + (registers.flagC ? 1 : 0));
+            const prev = registers.A;
+            const diff = prev - (memory[registers.PC++] + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
@@ -1050,13 +1061,14 @@ function tick(cpuState){
         }
         case primaryGroupNames.addImmediate8ToStackPtrToRegister16: // LDHL SP,n
         {
-            const sum = registers.SP + uint8ToInt8(memory[registers.PC++]);
+            const prev = registers.SP;
+            const sum = prev + uint8ToInt8(memory[registers.PC++]);
             const result = sum < 0 ? sum + 0x10000 : sum & 0xFFFF;
             registers.HL = result;
             registers.flagZ = false;
             registers.flagC = (sum > 0xFFFF || sum < 0);
             registers.flagN = false;
-            registers.flagH = 0; //TODO: "set or reset according to operation" ?
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             break;
         }
         // case loadRegister16ToStackPtr
@@ -1069,10 +1081,11 @@ function tick(cpuState){
             break;
         case primaryGroupNames.compareImmediate8WithAccum: // CP n
         {
-            const result = registers.A - memory[registers.PC++];
+            const prev = registers.A;
+            const result = prev - memory[registers.PC++];
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = false; // TODO: set if no borrow from bit 4
+            registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagC = (result < 0);
             break;
         }
