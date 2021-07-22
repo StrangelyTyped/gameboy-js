@@ -45,7 +45,8 @@ export default class JoypadBase {
 
     buttonUp(button){
         // Is possible to load page with button held
-        this.#buttonState[button] = Math.max(0, this.#buttonState[button] - 1);
+        //this.#buttonState[button] = Math.max(0, this.#buttonState[button] - 1);
+        this.#buttonState[button] = 0;
         this.#recalculateStateFlags();
     }
 
