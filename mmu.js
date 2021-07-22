@@ -89,9 +89,11 @@ class MMU {
     #mbc;
     #romBankCount;
     #ramBankCount;
+
     #gpu;
     #joypad;
     #timer;
+    #serial;
     constructor(){
         this.#banks = {
             bootRom: makeBuffer(0x100),
@@ -185,7 +187,11 @@ class MMU {
                                 }
                                 return 0x80;
                             } else if(k >= 0xFF01 && k <= 0xFF02){
-                                // Serial transfer, ignore for now
+                                // Serial transfer
+                                if(this.#serial){
+                                    return this.#serial.readRegister(k);
+                                }
+                                return 0;
                             } else if(k ===  0xFF00){
                                 // joypad
                                 if(this.#joypad){
@@ -263,7 +269,10 @@ class MMU {
                                     this.#timer.writeRegister(k, v);
                                 }
                             } else if(k >= 0xFF01 && k <= 0xFF02){
-                                // Serial transfer, ignore for now
+                                // Serial transfer
+                                if(this.#serial){
+                                    this.#serial.writeRegister(k, v);
+                                }
                             } else if(k ===  0xFF00){
                                 // joypad
                                 if(this.#joypad){
@@ -387,6 +396,9 @@ class MMU {
     }
     mapTimer(timer){
         this.#timer = timer;
+    }
+    mapSerial(serial){
+        this.#serial = serial;
     }
 }
 

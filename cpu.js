@@ -250,7 +250,7 @@ function tick(cpuState){
             //timer
             memory[0xFF0F] = interrupts & 0xFB;
             jumpTarget = 0x50;
-            //console.log("Invoking interrupt timer");
+            console.log("Invoking interrupt timer");
         }else if(interrupts & 0x8){
             //serial
             memory[0xFF0F] = interrupts & 0xF7;
@@ -1178,6 +1178,13 @@ class CPU {
         timer.onCounterOverflow(() => {
             if(this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x4){
                 memory[0xFF0F] |= 0x4;
+            }
+        });
+    }
+    registerSerialCallbacks(serial){
+        serial.onTransfer(() => {
+            if(this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x8){
+                memory[0xFF0F] |= 0x8;
             }
         });
     }

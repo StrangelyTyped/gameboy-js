@@ -2,6 +2,7 @@ export default class Timer {
     #registers;
     #callbacks = [];
     #cycleCounters;
+    #timerFreq;
     constructor(){
         this.#registers = {
             divider: 0,
@@ -13,6 +14,7 @@ export default class Timer {
             divider: 0,
             timer: 0,
         }
+        this.writeRegister(0xFF07, 0);
     }
     tick(cycles){
         this.#cycleCounters.divider += cycles;
@@ -20,7 +22,17 @@ export default class Timer {
             this.#cycleCounters.divider -= 16384;
             this.#registers.divider = (this.#registers.divider + 1) & 0xFF;
         }
-        //TODO: timer
+        if(this.#registers.control & 0x4){
+            this.#cycleCounters.timer += cycles;
+            while(this.#cycleCounters.timer > this.#timerFreq){
+                this.#cycleCounters.timer -= this.#timerFreq;
+                this.#registers.counter++;
+                if(this.#registers.counter > 0xFF){
+                    this.#registers.counter = this.#registers.modulo;
+                    this.#callbacks.forEach(cb => cb());
+                }
+            }
+        }
     }
     onCounterOverflow(cb){
         this.#callbacks.push(cb);
@@ -52,7 +64,21 @@ export default class Timer {
                 this.#registers.modulo = v;
                 break;
             case 0xFF07:
-                this.#registers.control = v & 0x3;
+                this.#registers.control = v & 0x7;
+                switch(v & 0x3){
+                    case 0:
+                        this.#timerFreq = 1024;
+                        break;
+                    case 1:
+                        this.#timerFreq = 16;
+                        break;
+                    case 2:
+                        this.#timerFreq = 64;
+                        break;
+                    case 3:
+                        this.#timerFreq = 256;
+                        break;
+                }
                 break;
             default:
                 console.warn("Timer write unexpected register", k, v);

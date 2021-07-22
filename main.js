@@ -1,8 +1,9 @@
 import bios from "./gb_bios.mjs";
-import rom from './mario1.mjs';
+import rom from './tetris.mjs';
 
 import JoypadKeyboard from "./joypad-keyboard.js";
 import Timer from "./timer.js";
+import Serial from "./serial.js";
 import mmu from "./mmu.js";
 import GraphicsPipeline from "./graphics.js";
 
@@ -26,6 +27,10 @@ const timer = new Timer();
 mmu.mapTimer(timer);
 cpu.registerTimerCallbacks(timer);
 
+const serial = new Serial();
+mmu.mapSerial(serial);
+cpu.registerSerialCallbacks(serial);
+
 const frameTime = document.getElementById("frametime");
 const fps = document.getElementById("fpsCounter");
 
@@ -47,6 +52,7 @@ function run(elapsed = 0){
         const elapsed = cpu.tick();
         gpu.tick(elapsed);
         timer.tick(elapsed);
+        serial.tick(elapsed);
         targetCycles -= elapsed;
     }
     cpuRemainder = targetCycles;
