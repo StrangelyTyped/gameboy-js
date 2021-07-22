@@ -52,24 +52,24 @@ function extendedTick(){
         case extendedGroupNames.rotateLeftCarry:
         {
             const register = getStandardRegisterLow3(opcode);
-            let value = registers[register];
-            const carry = (value & 0x80) !== 0;
-            value = ((value << 1) & 0xFF) | (registers.flagC ? 1 : 0);
-            registers[register] = value;
+            const prev = registers[register];
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF) | (registers.flagC ? 1 : 0);
+            registers[register] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
         case extendedGroupNames.rotateLeftCarryPtr:
         {
-            let value = memory[registers.HL];
-            const carry = (value & 0x80) !== 0;
-            value = ((value << 1) & 0xFF) | (registers.flagC ? 1 : 0);
-            memory[registers.HL] = value;
+            const prev = memory[registers.HL];
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF) | (registers.flagC ? 1 : 0);
+            memory[registers.HL] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
@@ -77,24 +77,24 @@ function extendedTick(){
         case extendedGroupNames.rotateRightCarry:
         {
             const register = getStandardRegisterLow3(opcode);
-            let value = registers[register];
-            const carry = (value & 0x01) !== 0;
-            value = (value >> 1) | (registers.flagC ? 0x80 : 0x00);
-            registers[register] = value;
+            const prev = registers[register];
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1) | (registers.flagC ? 0x80 : 0x00);
+            registers[register] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
         case extendedGroupNames.rotateRightCarryPtr:
         {
-            let value = memory[registers.HL];
-            const carry = (value & 0x01) !== 0;
-            value = (value >> 1) | (registers.flagC ? 0x80 : 0x00);
-            memory[registers.HL] = value;
+            const prev = memory[registers.HL];
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1) | (registers.flagC ? 0x80 : 0x00);
+            memory[registers.HL] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
@@ -102,24 +102,24 @@ function extendedTick(){
         case extendedGroupNames.shiftLeft:
         {
             const register = getStandardRegisterLow3(opcode);
-            let value = registers[register];
-            const carry = (value & 0x80) !== 0;
-            value = ((value << 1) & 0xFF);
-            registers[register] = value;
+            const prev = registers[register];
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF);
+            registers[register] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
         case extendedGroupNames.shiftLeftPtr:
         {
-            let value = memory[registers.HL];
-            const carry = (value & 0x80) !== 0;
-            value = ((value << 1) & 0xFF);
-            memory[registers.HL] = value;
+            const prev = memory[registers.HL];
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF);
+            memory[registers.HL] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
@@ -129,22 +129,22 @@ function extendedTick(){
         case extendedGroupNames.swap:
         {
             const register = getStandardRegisterLow3(opcode);
-            let value = registers[register];
-            value = ((value & 0xF) << 4) | ((value & 0xF0) >> 4);
-            registers[register] = value;
+            const prev = registers[register];
+            const result = ((prev & 0xF) << 4) | ((prev & 0xF0) >> 4);
+            registers[register] = result;
             registers.flagC = false;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
         case extendedGroupNames.swapPtr:
         {
-            let value = memory[registers.HL];
-            value = ((value & 0xF) << 4) | ((value & 0xF0) >> 4);
-            memory[registers.HL] = value;
+            const prev = memory[registers.HL];
+            const result = ((value & 0xF) << 4) | ((value & 0xF0) >> 4);
+            memory[registers.HL] = result;
             registers.flagC = false;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
@@ -152,24 +152,24 @@ function extendedTick(){
         case extendedGroupNames.shiftRightLogical:
         {
             const register = getStandardRegisterLow3(opcode);
-            let value = registers[register];
-            const carry = (value & 0x01) !== 0;
-            value = (value >> 1);
-            registers[register] = value;
+            const prev = registers[register];
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1);
+            registers[register] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
         case extendedGroupNames.shiftRightLogicalPtr:
         {
-            let value = memory[registers.HL];
-            const carry = (value & 0x01) !== 0;
-            value = (value >> 1);
-            memory[registers.HL] = value;
+            const prev = memory[registers.HL];
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1);
+            memory[registers.HL] = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
@@ -177,7 +177,8 @@ function extendedTick(){
         case extendedGroupNames.testBit:
         {
             const bitMask = 1 << ((opcode >> 3) & 0x7);
-            registers.flagZ = (registers[getStandardRegisterLow3(opcode)] & bitMask) === 0;
+            const prev = registers[getStandardRegisterLow3(opcode)]
+            registers.flagZ = (prev & bitMask) === 0;
             registers.flagN = false;
             registers.flagH = true;
             break;
@@ -384,12 +385,12 @@ function tick(cpuState){
         }
         case primaryGroupNames.rotateLeft: //RLCA
         {
-            let value = registers.A;
-            const carry = (value & 0x80) !== 0;
-            value = ((value << 1) & 0xFF) | (carry ? 1 : 0);
-            registers.A = value;
+            const prev = registers.A;
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF) | (carry ? 1 : 0);
+            registers.A = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false; // known good
             break;
@@ -478,12 +479,12 @@ function tick(cpuState){
         // case stop
         case primaryGroupNames.rotateLeftCarry: // RLA
         {
-            let value = registers.A;
-            const carry = (value & 0x80) !== 0;
-            value = ((value << 1) & 0xFF) | (registers.flagC ? 1 : 0);
-            registers.A = value;
+            const prev = registers.A;
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF) | (registers.flagC ? 1 : 0);
+            registers.A = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false; // known good
             break;
@@ -496,12 +497,12 @@ function tick(cpuState){
         }
         case primaryGroupNames.rotateRightCarry: // RRA
         {
-            let value = registers.A;
-            const carry = (value & 0x01) !== 0;
-            value = (value >> 1) | (registers.flagC ? 0x80 : 0x00);
-            registers.A = value;
+            const prev = registers.A;
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1) | (registers.flagC ? 0x80 : 0x00);
+            registers.A = result;
             registers.flagC = carry;
-            registers.flagZ = (value === 0);
+            registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false; // known good
             break;
@@ -537,14 +538,15 @@ function tick(cpuState){
         case primaryGroupNames.bcdAdjust: // DAA
         {
             let result = registers.A;
-            let modifier = 0;
             if(registers.flagH || (result & 0xF) > 0x9){
-                modifier |= 0x6;
+                result = result + (registers.flagN ? -0x6 : 0x6);
             }
             if(registers.flagC || (result & 0xF0) > 0x90){
-                modifier |= 0x60;
+                result = result + (registers.flagN ? -0x60 : 0x60);
             }
-            result += (registers.flagN ? -modifier : modifier);
+            if((result & 0xF) > 9 || (result & 0xF0) > 0x90){
+                console.warn("Bad DAA", registers.A, result & 0xFF, previousOp);
+            }
             registers.A = result & 0xFF;
             registers.flagZ = (result & 0xFF) === 0;
             registers.flagH = false; // known good
@@ -691,7 +693,8 @@ function tick(cpuState){
         }
         case primaryGroupNames.andRegister8WithAccum: // AND n
         {
-            const result = registers.A & registers[getStandardRegisterLow3(opcode)];
+            const prev = registers.A;
+            const result = prev & registers[getStandardRegisterLow3(opcode)];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -701,7 +704,8 @@ function tick(cpuState){
         }
         case primaryGroupNames.andPtr8WithAccum: // AND n
         {
-            const result = registers.A & memory[registers.HL];
+            const prev = registers.A;
+            const result = prev & memory[registers.HL];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -711,7 +715,8 @@ function tick(cpuState){
         }
         case primaryGroupNames.xorRegister8WithAccum: // XOR n
         {
-            const result = registers.A ^ registers[getStandardRegisterLow3(opcode)];
+            const prev = registers.A;
+            const result = prev ^ registers[getStandardRegisterLow3(opcode)];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -721,7 +726,8 @@ function tick(cpuState){
         }
         case primaryGroupNames.xorPtrWithAccum: // XOR n
         {
-            const result = registers.A ^ memory[registers.HL];
+            const prev = registers.A;
+            const result = prev ^ memory[registers.HL];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -731,7 +737,8 @@ function tick(cpuState){
         }
         case primaryGroupNames.orRegister8WithAccum: // OR n
         {
-            const result = registers.A | registers[getStandardRegisterLow3(opcode)];
+            const prev = registers.A;
+            const result = prev | registers[getStandardRegisterLow3(opcode)];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -741,7 +748,8 @@ function tick(cpuState){
         }
         case primaryGroupNames.orPtrWithAccum: // OR n
         {
-            const result = registers.A | memory[registers.HL];
+            const prev = registers.A;
+            const result = prev | memory[registers.HL];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -1012,8 +1020,8 @@ function tick(cpuState){
             break;
         case primaryGroupNames.andImmediate8WithAccum: // AND n
         {
-            const immediate = memory[registers.PC++];
-            const result = registers.A & immediate;
+            const prev = registers.A;
+            const result = prev & memory[registers.PC++];
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagC = false;
@@ -1034,7 +1042,8 @@ function tick(cpuState){
         }
         case primaryGroupNames.xorImmediate8WithAccum: // XOR n
         {
-            const result = registers.A ^ memory[registers.PC++];
+            const prev = registers.A;
+            const result = prev ^ memory[registers.PC++];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -1051,7 +1060,8 @@ function tick(cpuState){
             break;
         case primaryGroupNames.orImmediate8WithAccum: // OR n
         {
-            const result = registers.A | memory[registers.PC++];
+            const prev = registers.A;
+            const result = prev | memory[registers.PC++];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
