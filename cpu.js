@@ -240,27 +240,22 @@ function tick(cpuState){
             //vblank
             memory[0xFF0F] = interrupts & 0xFE;
             jumpTarget = 0x40;
-            //console.log("Invoking interrupt vblank");
         }else if(interrupts & 0x2){
             //lcd stat
             memory[0xFF0F] = interrupts & 0xFD;
             jumpTarget = 0x48;
-            //console.log("Invoking interrupt STAT");
         }else if(interrupts & 0x4){
             //timer
             memory[0xFF0F] = interrupts & 0xFB;
             jumpTarget = 0x50;
-            console.log("Invoking interrupt timer");
         }else if(interrupts & 0x8){
             //serial
             memory[0xFF0F] = interrupts & 0xF7;
             jumpTarget = 0x58;
-            //console.log("Invoking interrupt serial");
         }else if(interrupts & 0x10){
             //joypad
             memory[0xFF0F] = interrupts & 0xEF;
             jumpTarget = 0x60;
-            //console.log("Invoking interrupt joypad");
         }
         registers.SP -= 2;
         memoryWrite16(registers.SP, registers.PC);

@@ -49,6 +49,7 @@ export default class GraphicsPipeline {
     #memory;
     #registerData;
     #tickCounter = 0;
+    #scanlineParams;
     #callbacks = {
         lyc: [],
         hblank: [],
@@ -56,6 +57,8 @@ export default class GraphicsPipeline {
         oam: [],
     };
     #layerBuffers;
+    #debugCanvas;
+    #debugData;
     constructor(canvasElem){
         this.#registerData = {
             control: 0,
@@ -74,6 +77,12 @@ export default class GraphicsPipeline {
             interruptFlags: 0,
             mode: MODE_SEARCH_OAM,
         };
+        this.#scanlineParams = {
+            scrollX: 0,
+            scrollY: 0,
+            windowX: 0,
+            windowY: 0,
+        };
         this.#layerBuffers = {
             bg: new Array(screenW).fill(0),
             win: new Array(screenW).fill(0),
@@ -84,6 +93,13 @@ export default class GraphicsPipeline {
         this.#canvas = canvasElem.getContext('2d');
         this.#imageData = this.#canvas.createImageData(screenW, 1);
         this.#imageData.data.fill(0xFF);
+
+        const debugCanvas = document.getElementById("bgmap");
+        if(debugCanvas){
+            this.#debugCanvas = debugCanvas.getContext("2d");
+            this.#debugData = this.#debugCanvas.getImageData(0, 0, 256, 256);
+            this.#debugData.data.fill(0xff);
+        }
     }
     onLyc(callback){
         this.#callbacks.lyc.push(callback);
@@ -214,7 +230,7 @@ export default class GraphicsPipeline {
     #readTile(buffer, bufferX, basePtr){
         const b0 = this.#memory[basePtr];
         const b1 = this.#memory[basePtr + 1];
-        for(let i = 0; i < 8 && (bufferX + i) < buffer.length; i++){
+        for(let i = Math.max(0, -bufferX); i < 8 && (bufferX + i) < buffer.length; i++){
             const p0 = (b0 & (1 << (7 - i))) ? 1 : 0;
             const p1 = (b1 & (1 << (7 - i))) ? 2 : 0;
             buffer[bufferX + i] = p0 | p1;
@@ -226,16 +242,19 @@ export default class GraphicsPipeline {
         const bgTileMap = (this.#registerData.control & 0x08) ? 0x9C00 : 0x9800;
 
         const y = this.#registerData.y;
-        const bgY = (y + this.#registerData.scrollY % 256);
+        const bgY = (y + this.#scanlineParams.scrollY % 256);
         const buffer = this.#layerBuffers.bg;
         buffer.fill(0);
-        for(let x = 0; x < screenW; x+=8){
-            let bgTileId = this.#memory[bgTileMap + (32 * Math.floor(bgY/8)) + Math.floor(((x + this.#registerData.scrollX)%256)/8)];
+        const xTileShift = this.#scanlineParams.scrollX % 8;
+
+        for(let x = -xTileShift; x < screenW; x+=8){
+            const xTileOffs = ((x + this.#scanlineParams.scrollX)%256);
+            let bgTileId = this.#memory[bgTileMap + (32 * Math.floor(bgY/8)) + Math.floor(xTileOffs/8)];
             if(!bgTileDataAddressingMode){
                 bgTileId = uint8ToInt8(bgTileId);
             }
             const tileBase = bgTileData + (bgTileId * 16);
-            this.#readTile(buffer, x, tileBase + ((bgY % 8) * 2))
+            this.#readTile(buffer, x, tileBase + ((bgY % 8) * 2));
         }
     }
     #fillWinLayer(){
@@ -261,7 +280,7 @@ export default class GraphicsPipeline {
             
             //TODO: flipY
             if(sprites[i].flags & 0x40){
-                console.warn("Unsupported sprite flipY flag", sprites[i]);
+                //console.warn("Unsupported sprite flipY flag", sprites[i]);
             }
             
             const tileBase = 0x8000 + (sprites[i].tileId * 16) + ((y - sprites[i].y) * 2);
@@ -328,6 +347,38 @@ export default class GraphicsPipeline {
         this.#canvas.putImageData(imageData, 0, y);
     }
 
+    #debugDrawBgMap(){
+        if(!this.#debugCanvas){
+            return;
+        }
+        const bgTileDataAddressingMode = (this.#registerData.control & 0x10) ? 1 : 0;
+        const bgTileData = bgTileDataAddressingMode ? 0x8000 : 0x9000;
+        const bgTileMap = (this.#registerData.control & 0x08) ? 0x9C00 : 0x9800;
+        const buffer = this.#debugData.data;
+        for(let y = 0; y < 256; y++){
+            for(let x = 0; x < 256; x+=8){
+                let bgTileId = this.#memory[bgTileMap + (32 * Math.floor(y/8)) + Math.floor(x/8)];
+                if(!bgTileDataAddressingMode){
+                    bgTileId = uint8ToInt8(bgTileId);
+                }
+                const tileBase = bgTileData + (bgTileId * 16);
+                const basePtr = tileBase + ((y % 8) * 2);
+
+                const b0 = this.#memory[basePtr];
+                const b1 = this.#memory[basePtr + 1];
+                for(let i = 0; i < 8; i++){
+                    const p0 = (b0 & (1 << (7 - i))) ? 1 : 0;
+                    const p1 = (b1 & (1 << (7 - i))) ? 2 : 0;
+                    const colour = colours[this.#registerData.bgPaletteMap[p0 | p1]];
+                    buffer[((y * 256) + x + i) * 4] = colour;
+                    buffer[((y * 256) + x + i) * 4 + 1] = colour;
+                    buffer[((y * 256) + x + i) * 4 + 2] = colour;
+                }
+            }
+        }
+        this.#debugCanvas.putImageData(this.#debugData, 0, 0);
+    }
+
     tick(cycles){
         if(!(this.#registerData.control & 0x80)){
             // LCD disabled
@@ -360,7 +411,7 @@ export default class GraphicsPipeline {
                     if(this.#tickCounter > 196){
                         this.#tickCounter -= 196;
                         this.#registerData.y++;
-                        if(this.#registerData.y === this.#registerData.lyc){
+                        if(this.#registerData.y === this.#registerData.yCompare){
                             const lycInterruptEnabled = (this.#registerData.interruptFlags & 0x40) > 0
                             this.#callbacks.lyc.forEach(cb => cb(lycInterruptEnabled));
                         }
@@ -370,6 +421,10 @@ export default class GraphicsPipeline {
                             this.#callbacks.vblank.forEach(cb => cb(vblankInterruptEnabled));
                         } else {
                             this.#registerData.mode = MODE_SEARCH_OAM;
+                            this.#scanlineParams.scrollX = this.#registerData.scrollX;
+                            this.#scanlineParams.scrollY = this.#registerData.scrollY;
+                            this.#scanlineParams.windowX = this.#registerData.windowX;
+                            this.#scanlineParams.windowY = this.#registerData.windowY;
                         }
                     } else {
                         running = false;
@@ -382,6 +437,13 @@ export default class GraphicsPipeline {
                         if(this.#registerData.y >= screenScanH){
                             this.#registerData.y = 0;
                             this.#registerData.mode = MODE_SEARCH_OAM;
+                            this.#scanlineParams.scrollX = this.#registerData.scrollX;
+                            this.#scanlineParams.scrollY = this.#registerData.scrollY;
+                            this.#scanlineParams.windowX = this.#registerData.windowX;
+                            this.#scanlineParams.windowY = this.#registerData.windowY;
+                            const oamInterruptEnabled = (this.#registerData.interruptFlags & 0x20) > 0
+                            this.#callbacks.oam.forEach(cb => cb(oamInterruptEnabled));
+                            this.#debugDrawBgMap();
                         }
                     } else {
                         running = false;

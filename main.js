@@ -1,5 +1,5 @@
 import bios from "./gb_bios.mjs";
-import rom from './tetris.mjs';
+import rom from './mario1.mjs';
 
 import JoypadKeyboard from "./joypad-keyboard.js";
 import Timer from "./timer.js";
@@ -36,26 +36,22 @@ const fps = document.getElementById("fpsCounter");
 
 const browserFps = new FpsCounter();
 const gpuFps = new FpsCounter();
+let waitingForVsync = true;
 gpu.onVblank(() => {
     gpuFps.update();
     fps.innerText = browserFps.getCount() + "/" + gpuFps.getCount();
+    waitingForVsync = false;
 })
 
-
-let cpuRemainder = 0;
-function run(elapsed = 0){
+function run(){
     const tickStart = performance.now();
-    //console.log("Tick");
-    // This is _Very_ much not the correct timing...
-    let targetCycles = (4194.304 * Math.min(16.74, elapsed)) + cpuRemainder;
-    while(targetCycles > 0){
+    waitingForVsync = true;
+    while(waitingForVsync){
         const elapsed = cpu.tick();
         gpu.tick(elapsed);
         timer.tick(elapsed);
         serial.tick(elapsed);
-        targetCycles -= elapsed;
     }
-    cpuRemainder = targetCycles;
     requestAnimationFrame(run);
     const rtElapsed = performance.now() - tickStart;
     frameTime.innerText = Math.round(rtElapsed);
