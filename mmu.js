@@ -351,6 +351,15 @@ class MMU {
                 this.#mbc = new RomOnlyMbc(this.#activeBanks);
         }
     }
+    read16(idx){
+        return this.read(idx) | (this.read(idx + 1) << 8);
+    }
+    
+    write16(idx, val){
+        this.write(idx, val & 0xFF);
+        this.write(idx + 1, (val & 0xFF00) >> 8);
+    }
+    
     mapRomBank(index, data){
         if(data.length != 0x4000){
             const pad = new Array(0x4000 - data.length);
