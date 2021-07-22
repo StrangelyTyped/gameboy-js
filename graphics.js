@@ -153,6 +153,7 @@ export default class GraphicsPipeline {
             case 0xFF43:
                 this.#registerData.scrollX = v;
                 break;
+            // 0xFF44: y
             case 0xFF45:
                 this.#registerData.yCompare = v;
                 break;
@@ -210,12 +211,12 @@ export default class GraphicsPipeline {
         spritesForRow.sort((a, b) => a.x - b.x);
         return spritesForRow;
     }
-    #readTile(buffer, bufferX, basePtr, startingX = 0){
+    #readTile(buffer, bufferX, basePtr){
         const b0 = this.#memory[basePtr];
         const b1 = this.#memory[basePtr + 1];
-        for(let i = startingX; i < 8 && (bufferX + i) < buffer.length; i++){
-            const p0 = (b0 & (1 << (7-i))) ? 1 : 0;
-            const p1 = (b1 & (1 << (7-i))) ? 2 : 0;
+        for(let i = 0; i < 8 && (bufferX + i) < buffer.length; i++){
+            const p0 = (b0 & (1 << (7 - i))) ? 1 : 0;
+            const p1 = (b1 & (1 << (7 - i))) ? 2 : 0;
             buffer[bufferX + i] = p0 | p1;
         }
     }
@@ -252,16 +253,37 @@ export default class GraphicsPipeline {
         if(!sprites.length){
             return;
         }
-        for(let x = 0, i = 0; x < buffer.length && i < sprites.length; x++){
-            if(x < sprites[i].x){
-                continue;
+        for(let i = 0; i < sprites.length; i++){
+            const x = Math.max(0, sprites[i].x);
+            if(x  >= buffer.length){
+                break;
             }
-            //TODO: flipY / flipX
+            
+            //TODO: flipY
+            if(sprites[i].flags & 0x40){
+                console.warn("Unsupported sprite flipY flag", sprites[i]);
+            }
+            if(sprites[i].flags & 0x80){
+                console.warn("Unsupported sprite transparency flag", sprites[i]);
+            }
+            
             const tileBase = 0x8000 + (sprites[i].tileId * 16) + ((y - sprites[i].y) * 2);
-            this.#readTile(buffer, x, tileBase, x - sprites[i].x);
-            flagBuffer.fill(sprites[i].flags, x, Math.min(x + 8, buffer.length));
-            x += 7;
-            i++;
+
+            const b0 = this.#memory[tileBase];
+            const b1 = this.#memory[tileBase + 1];
+            const startingX = x - sprites[i].x;
+            const flipX = sprites[i].flags & 0x20;
+            
+            for(let readIdx = startingX, writeIdx = 0; readIdx < 8 && (x + writeIdx) < buffer.length; readIdx++, writeIdx++){
+                if(buffer[x + writeIdx] !== 0){
+                    continue;
+                }
+                const readI = flipX ? readIdx : (7 - readIdx);
+                const p0 = (b0 & (1 << readI)) ? 1 : 0;
+                const p1 = (b1 & (1 << readI)) ? 2 : 0;
+                buffer[x + writeIdx] = p0 | p1;
+                flagBuffer[x + writeIdx] = sprites[i].flags;
+            }
         }
     }
     #draw(){
