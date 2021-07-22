@@ -263,9 +263,6 @@ export default class GraphicsPipeline {
             if(sprites[i].flags & 0x40){
                 console.warn("Unsupported sprite flipY flag", sprites[i]);
             }
-            if(sprites[i].flags & 0x80){
-                console.warn("Unsupported sprite transparency flag", sprites[i]);
-            }
             
             const tileBase = 0x8000 + (sprites[i].tileId * 16) + ((y - sprites[i].y) * 2);
 
@@ -313,8 +310,13 @@ export default class GraphicsPipeline {
             const spriteFlags = this.#layerBuffers.objFlags[x];
             let pixel = 0;
             if(spritesEnabled && spritePix){
-                //todo flag 7
-                pixel = spritePalette[spriteFlags & 0x10 >> 4][spritePix];
+                if(spriteFlags & 0x80 && winPix != 0){
+                    pixel = bgPalette[winPix];
+                } else if(spriteFlags & 0x80 && bgPix != 0){
+                    pixel = bgPalette[bgPix];
+                } else {
+                    pixel = spritePalette[spriteFlags & 0x10 >> 4][spritePix];
+                }
             } else if(windowEnabled && winPix !== -1){
                 pixel = bgPalette[winPix];
             } else if(bgEnabled) {
