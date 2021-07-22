@@ -475,7 +475,18 @@ function tick(cpuState){
             }
             break;
         }
-        // case RRCA
+        case primaryGroupNames.rotateRight: // RRCA
+        {
+            const prev = registers.A;
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1) | (carry ? 0x80 : 0x00);
+            registers.A = result;
+            registers.flagC = carry;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false; // known good
+            break;
+        }
         // case stop
         case primaryGroupNames.rotateLeftCarry: // RLA
         {
@@ -1054,7 +1065,9 @@ function tick(cpuState){
         case primaryGroupNames.ioPortReadImmediate8:
             registers.A = memory[0xFF00 + memory[registers.PC++]];
             break;
-        // case ioPortReadRegister8
+        case primaryGroupNames.ioPortReadRegister8:
+            registers.A = memory[0xFF00 + registers.C];
+            break;
         case primaryGroupNames.disableInterrupts:
             cpuState.interruptsEnabled = false;
             break;

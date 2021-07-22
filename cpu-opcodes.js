@@ -22,7 +22,7 @@ const opcodeGroups = [
     new OpcodeGroup("addRegister16ToRegister16", 1, 8, [0x09, 0x19, 0x29, 0x39]),
     new OpcodeGroup("loadPtrToRegister8", 1, 8, [0x0A, 0x1A, 0x2A, 0x3A, 0x46, 0x4E, 0x56, 0x5E, 0x66, 0x6E, 0x7E]),
     new OpcodeGroup("decrementRegister16", 1, 8, [0x0B, 0x1B, 0x2B, 0x3B]),
-        new OpcodeGroup("RRCA", 1, 4, [0x0F]),
+    new OpcodeGroup("rotateRight", 1, 4, [0x0F]),
     new OpcodeGroup("stop", 2, 4, [0x10]),
     new OpcodeGroup("rotateLeftCarry", 1, 4, [0x17]),
     new OpcodeGroup("relativeJumpSignedImmediate8", 2, 12, [0x18]),
