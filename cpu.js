@@ -375,7 +375,7 @@ function tick(cpuState){
             registers[register] = result;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = (true);
-            registers.flagH = ((prev & 0xF) > (result & 0xF));
+            registers.flagH = ((prev & 0xF) < (result & 0xF));
             break;
         }
         case primaryGroupNames.loadImmediate8ToRegister:
@@ -574,7 +574,7 @@ function tick(cpuState){
             const result = prev > 0 ? prev - 1 : 0xFF;
             memory[registers.HL] = result;
             registers.flagZ = (result === 0);
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagN = true;
             break;
         }
@@ -651,7 +651,7 @@ function tick(cpuState){
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
@@ -663,7 +663,7 @@ function tick(cpuState){
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
@@ -675,7 +675,7 @@ function tick(cpuState){
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
@@ -687,7 +687,7 @@ function tick(cpuState){
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF)
+            registers.flagH = (prev & 0xF) < (result & 0xF)
             registers.flagC = (diff < 0);
             break;
         }
@@ -763,7 +763,7 @@ function tick(cpuState){
             const result = prev - registers[getStandardRegisterLow3(opcode)];
             registers.flagZ = result === 0;
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (result < 0);
             break;
         }
@@ -773,7 +773,7 @@ function tick(cpuState){
             const result = prev - memory[registers.HL];
             registers.flagZ = result === 0;
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (result < 0);
             break;
         }
@@ -918,7 +918,7 @@ function tick(cpuState){
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagC = (result > 0xFF);
-            registers.flagN = 0;
+            registers.flagN = false;
             registers.flagH = (prev & 0xF) > (result & 0xF);
             break;
         }
@@ -997,7 +997,7 @@ function tick(cpuState){
             registers.flagZ = (result === 0);
             registers.flagC = (diff < 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             break;
         }
         case primaryGroupNames.subCarryImmediate8FromAccum: // SBC A,n
@@ -1008,7 +1008,7 @@ function tick(cpuState){
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (diff < 0);
             break;
         }
@@ -1095,7 +1095,7 @@ function tick(cpuState){
             const result = prev - memory[registers.PC++];
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (result < 0);
             break;
         }
