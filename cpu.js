@@ -1,11 +1,7 @@
 import {primaryGroups, primaryGroupNames, extendedGroups, extendedGroupNames} from "./cpu-opcodes.js";
 import registers from "./cpu-registers.js";
 import mmu from "./mmu.js";
-import {memoryRead16, memoryWrite16, uint8ToInt8} from "./memory-utils.js";
-const memory = mmu.memory;
-
-
-
+import {uint8ToInt8} from "./memory-utils.js";
 
 const standardOpcodeRegisterMappingLow3 = [
     "B",
@@ -38,7 +34,7 @@ function getStandardRegisterOther(opcode){
 }
 
 function extendedTick(){
-    const opcode = memory[registers.PC++];
+    const opcode = mmu.read(registers.PC++);
     //console.log("Extended opcode", opcode);
     const opcodeGroup = extendedGroups[opcode];
     if(logInstructions){
@@ -60,10 +56,10 @@ function extendedTick(){
         }
         case extendedGroupNames.rotateLeftPtr:
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const carry = (prev & 0x80) !== 0;
             const result = ((prev << 1) & 0xFF) | (carry ? 1 : 0);
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -85,10 +81,10 @@ function extendedTick(){
         }
         case extendedGroupNames.rotateRightPtr:
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
             const result = (prev >> 1) | (carry ? 0x80 : 0x00);
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -110,10 +106,10 @@ function extendedTick(){
         }
         case extendedGroupNames.rotateLeftCarryPtr:
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const carry = (prev & 0x80) !== 0;
             const result = ((prev << 1) & 0xFF) | (registers.flagC ? 1 : 0);
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -135,10 +131,10 @@ function extendedTick(){
         }
         case extendedGroupNames.rotateRightCarryPtr:
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
             const result = (prev >> 1) | (registers.flagC ? 0x80 : 0x00);
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -160,10 +156,10 @@ function extendedTick(){
         }
         case extendedGroupNames.shiftLeftPtr:
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const carry = (prev & 0x80) !== 0;
             const result = ((prev << 1) & 0xFF);
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -186,11 +182,11 @@ function extendedTick(){
         }
         case extendedGroupNames.shiftRightPtr:
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
             const msb = (prev & 0x80);
             const result = ((prev >> 1) & 0xFF) | msb;
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -211,9 +207,9 @@ function extendedTick(){
         }
         case extendedGroupNames.swapPtr:
         {
-            const prev = memory[registers.HL];
-            const result = ((value & 0xF) << 4) | ((value & 0xF0) >> 4);
-            memory[registers.HL] = result;
+            const prev = mmu.read(registers.HL);
+            const result = ((prev & 0xF) << 4) | ((prev & 0xF0) >> 4);
+            mmu.write(registers.HL, result);
             registers.flagC = false;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -235,10 +231,10 @@ function extendedTick(){
         }
         case extendedGroupNames.shiftRightLogicalPtr:
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
             const result = (prev >> 1);
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
@@ -257,7 +253,7 @@ function extendedTick(){
         case extendedGroupNames.testBitPtr:
         {
             const bitMask = 1 << ((opcode >> 3) & 0x7);
-            registers.flagZ = (memory[registers.HL] & bitMask) === 0;
+            registers.flagZ = (mmu.read(registers.HL) & bitMask) === 0;
             registers.flagN = false;
             registers.flagH = true;
             break;
@@ -271,7 +267,9 @@ function extendedTick(){
         case extendedGroupNames.resetBitPtr:
         {
             const bitMask = 0xFF ^ (1 << ((opcode >> 3) & 0x7));
-            memory[registers.HL] &= bitMask;
+            const prev = mmu.read(registers.HL);
+            const result = prev & bitMask;
+            mmu.write(registers.HL, result);
             break;
         }
         case extendedGroupNames.setBit:
@@ -283,7 +281,9 @@ function extendedTick(){
         case extendedGroupNames.setBitPtr:
         {
             const bitMask = (1 << ((opcode >> 3) & 0x7));
-            memory[registers.HL] |= bitMask;
+            const prev = mmu.read(registers.HL);
+            const result = prev | bitMask;
+            mmu.write(registers.HL, result);
             break;
         }
         default:
@@ -301,35 +301,35 @@ function tick(cpuState){
         console.log("Before", JSON.stringify(registers.values));
     }
 
-    const interrupts = memory[0xFF0F];
+    const interrupts = mmu.read(0xFF0F);
     // service interrupts
-    if(cpuState.interruptsEnabled && memory[0xFFFF] && interrupts & 0x1F){
+    if(cpuState.interruptsEnabled && mmu.read(0xFFFF) && (interrupts & 0x1F)){
         cpuState.awaitingInterrupt = false;
         cpuState.interruptsEnabled = false;
         let jumpTarget;
         if(interrupts & 0x1){
             //vblank
-            memory[0xFF0F] = interrupts & 0xFE;
+            mmu.write(0xFF0F, interrupts & 0xFE);
             jumpTarget = 0x40;
         }else if(interrupts & 0x2){
             //lcd stat
-            memory[0xFF0F] = interrupts & 0xFD;
+            mmu.write(0xFF0F, interrupts & 0xFD);
             jumpTarget = 0x48;
         }else if(interrupts & 0x4){
             //timer
-            memory[0xFF0F] = interrupts & 0xFB;
+            mmu.write(0xFF0F, interrupts & 0xFB);
             jumpTarget = 0x50;
         }else if(interrupts & 0x8){
             //serial
-            memory[0xFF0F] = interrupts & 0xF7;
+            mmu.write(0xFF0F, interrupts & 0xF7);
             jumpTarget = 0x58;
         }else if(interrupts & 0x10){
             //joypad
-            memory[0xFF0F] = interrupts & 0xEF;
+            mmu.write(0xFF0F, interrupts & 0xEF);
             jumpTarget = 0x60;
         }
         registers.SP -= 2;
-        memoryWrite16(registers.SP, registers.PC);
+        mmu.write16(registers.SP, registers.PC);
         registers.PC = jumpTarget;
         return 16;
     }
@@ -338,7 +338,7 @@ function tick(cpuState){
         return 4;
     }
 
-    const opcode = memory[registers.PC++];
+    const opcode = mmu.read(registers.PC++);
     
     const opcodeGroup = primaryGroups[opcode];
 
@@ -353,7 +353,7 @@ function tick(cpuState){
             break;
         case primaryGroupNames.loadImmediate16ToRegister:
         {
-            const immediate = memoryRead16(registers.PC);
+            const immediate = mmu.read16(registers.PC);
             registers.PC += 2;
             switch(opcode){
                 case 0x01:
@@ -376,16 +376,16 @@ function tick(cpuState){
         case primaryGroupNames.loadRegister8ToPtr:
             switch(opcode){
                 case 0x02:
-                    memory[registers.BC] = registers.A;
+                    mmu.write(registers.BC, registers.A);
                     break;
                 case 0x12:
-                    memory[registers.DE] = registers.A;
+                    mmu.write(registers.DE, registers.A);
                     break;
                 case 0x22:
-                    memory[registers.HL++] = registers.A;
+                    mmu.write(registers.HL++, registers.A);
                     break;
                 case 0x32:
-                    memory[registers.HL--] = registers.A;
+                    mmu.write(registers.HL--, registers.A);
                     break;
                 case 0x70:
                 case 0x71:
@@ -394,7 +394,7 @@ function tick(cpuState){
                 case 0x74:
                 case 0x75:
                 case 0x77:
-                    memory[registers.HL] = registers[getStandardRegisterLow3(opcode)];
+                    mmu.write(registers.HL, registers[getStandardRegisterLow3(opcode)]);
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
@@ -446,7 +446,7 @@ function tick(cpuState){
         }
         case primaryGroupNames.loadImmediate8ToRegister:
         {
-            registers[getStandardRegisterOther(opcode)] = memory[registers.PC++];
+            registers[getStandardRegisterOther(opcode)] = mmu.read(registers.PC++);
             break;
         }
         case primaryGroupNames.rotateLeft: //RLCA
@@ -463,9 +463,9 @@ function tick(cpuState){
         }
         case primaryGroupNames.loadRegister16ToImmediateAddr:
         {    
-            const addr = memoryRead16(registers.PC);
+            const addr = mmu.read16(registers.PC);
             registers.PC += 2;
-            memoryWrite16(addr, registers.SP);
+            mmu.write16(addr, registers.SP);
             break;
         }
         case primaryGroupNames.addRegister16ToRegister16: // ADD HL,n
@@ -497,16 +497,16 @@ function tick(cpuState){
         case primaryGroupNames.loadPtrToRegister8:
             switch(opcode){
                 case 0x0A:
-                    registers.A = memory[registers.BC];
+                    registers.A = mmu.read(registers.BC);
                     break;
                 case 0x1A:
-                    registers.A = memory[registers.DE];
+                    registers.A = mmu.read(registers.DE);
                     break;
                 case 0x2A:
-                    registers.A = memory[registers.HL++];
+                    registers.A = mmu.read(registers.HL++);
                     break;
                 case 0x3A:
-                    registers.A = memory[registers.HL--];
+                    registers.A = mmu.read(registers.HL--);
                     break;
                 case 0x46:
                 case 0x4E:
@@ -515,7 +515,7 @@ function tick(cpuState){
                 case 0x66:
                 case 0x6E:
                 case 0x7E:
-                    registers[getStandardRegisterOther(opcode)] = memory[registers.HL];
+                    registers[getStandardRegisterOther(opcode)] = mmu.read(registers.HL);
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
@@ -568,7 +568,7 @@ function tick(cpuState){
         }
         case primaryGroupNames.relativeJumpSignedImmediate8:
         {
-            const offset = uint8ToInt8(memory[registers.PC++]);
+            const offset = uint8ToInt8(mmu.read(registers.PC++));
             registers.PC += offset;
             break;
         }
@@ -586,7 +586,7 @@ function tick(cpuState){
         }
         case primaryGroupNames.relativeJumpFlagSignedImmediate8:
         {
-            const offset = uint8ToInt8(memory[registers.PC++]);
+            const offset = uint8ToInt8(mmu.read(registers.PC++));
             let takeBranch = false;
             switch(opcode){
                 case 0x20:
@@ -637,9 +637,9 @@ function tick(cpuState){
             break;
         case primaryGroupNames.incrementPtr: // INC n
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const result = prev + 1;
-            memory[registers.HL] = result & 0xFF;
+            mmu.write(registers.HL, result & 0xFF);
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagH = (prev & 0xF) > (result & 0xF);
             registers.flagN = false;
@@ -647,16 +647,16 @@ function tick(cpuState){
         }
         case primaryGroupNames.decrementPtr: // DEC n
         {
-            const prev = memory[registers.HL];
+            const prev = mmu.read(registers.HL);
             const result = prev > 0 ? prev - 1 : 0xFF;
-            memory[registers.HL] = result;
+            mmu.write(registers.HL, result);
             registers.flagZ = (result === 0);
             registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagN = true;
             break;
         }
         case primaryGroupNames.loadImmediate8ToPtr:
-            memory[registers.HL] = memory[registers.PC++];
+            mmu.write(registers.HL, mmu.read(registers.PC++));
             break;
         case primaryGroupNames.setCarryFlag: // SCF
             registers.flagN = false;
@@ -690,7 +690,7 @@ function tick(cpuState){
         case primaryGroupNames.addPtrToAccum:
         {
             const prev = registers.A;
-            const result = prev + memory[registers.HL];
+            const result = prev + mmu.read(registers.HL);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
@@ -712,7 +712,7 @@ function tick(cpuState){
         case primaryGroupNames.addCarryPtrToAccum: // ADC A, n
         {
             const prev = registers.A;
-            const result = prev + memory[registers.HL] + (registers.flagC ? 1 : 0);
+            const result = prev + mmu.read(registers.HL) + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
@@ -735,7 +735,7 @@ function tick(cpuState){
         case primaryGroupNames.subPtrFromAccum: // SUB n
         {
             const prev = registers.A;
-            const diff = prev - memory[registers.HL];
+            const diff = prev - mmu.read(registers.HL);
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
@@ -759,7 +759,7 @@ function tick(cpuState){
         case primaryGroupNames.subCarryPtrFromAccum: // SBC A,n
         {
             const prev = registers.A;
-            const diff = prev - (memory[registers.HL] + (registers.flagC ? 1 : 0));
+            const diff = prev - (mmu.read(registers.HL) + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
@@ -782,7 +782,7 @@ function tick(cpuState){
         case primaryGroupNames.andPtr8WithAccum: // AND n
         {
             const prev = registers.A;
-            const result = prev & memory[registers.HL];
+            const result = prev & mmu.read(registers.HL);
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -804,7 +804,7 @@ function tick(cpuState){
         case primaryGroupNames.xorPtrWithAccum: // XOR n
         {
             const prev = registers.A;
-            const result = prev ^ memory[registers.HL];
+            const result = prev ^ mmu.read(registers.HL);
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -826,7 +826,7 @@ function tick(cpuState){
         case primaryGroupNames.orPtrWithAccum: // OR n
         {
             const prev = registers.A;
-            const result = prev | memory[registers.HL];
+            const result = prev | mmu.read(registers.HL);
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -847,7 +847,7 @@ function tick(cpuState){
         case primaryGroupNames.comparePtrWithAccum: // CP n
         {
             const prev = registers.A;
-            const result = prev - memory[registers.HL];
+            const result = prev - mmu.read(registers.HL);
             registers.flagZ = result === 0;
             registers.flagN = true;
             registers.flagH = (prev & 0xF) < (result & 0xF);
@@ -874,7 +874,7 @@ function tick(cpuState){
                     console.warn("unexpected opcode", opcode);
             }
             if(takeBranch){
-                registers.PC = memoryRead16(registers.SP);
+                registers.PC = mmu.read16(registers.SP);
                 registers.SP += 2;
                 cycleIncrement = cycleIncrement[0];
             }else{
@@ -884,7 +884,7 @@ function tick(cpuState){
         }
         case primaryGroupNames.popStack16:
         {
-            const data = memoryRead16(registers.SP);
+            const data = mmu.read16(registers.SP);
             switch(opcode){
                 case 0xC1:
                     registers.BC = data;
@@ -921,7 +921,7 @@ function tick(cpuState){
                 default:
                     console.warn("unexpected opcode", opcode);
             }
-            const jumpTarget = memoryRead16(registers.PC);
+            const jumpTarget = mmu.read16(registers.PC);
             registers.PC += 2;
             if(takeBranch){    
                 registers.PC = jumpTarget;
@@ -932,7 +932,7 @@ function tick(cpuState){
             break;
         }
         case primaryGroupNames.jumpImmediate16:
-            registers.PC = memoryRead16(registers.PC);
+            registers.PC = mmu.read16(registers.PC);
             break;
         case primaryGroupNames.conditionalCallFlagImmediate16:
         {
@@ -953,11 +953,11 @@ function tick(cpuState){
                 default:
                     console.warn("unexpected opcode", opcode);
             }
-            const func = memoryRead16(registers.PC);
+            const func = mmu.read16(registers.PC);
             registers.PC += 2;
             if(takeBranch){    
                 registers.SP -= 2;
-                memoryWrite16(registers.SP, registers.PC);
+                mmu.write16(registers.SP, registers.PC);
                 registers.PC = func;
                 cycleIncrement = cycleIncrement[0];
             }else{
@@ -985,13 +985,13 @@ function tick(cpuState){
                 default:
                     console.warn("unexpected opcode", opcode);
             }
-            memoryWrite16(registers.SP, data);
+            mmu.write16(registers.SP, data);
             break;
         }
         case primaryGroupNames.addImmediate8ToAccum: // ADD a,n
         {
             const prev = registers.A;
-            const result = prev + memory[registers.PC++];
+            const result = prev + mmu.read(registers.PC++);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagC = (result > 0xFF);
@@ -1031,12 +1031,12 @@ function tick(cpuState){
                     console.warn("unexpected opcode", opcode);
             }
             registers.SP -= 2;
-            memoryWrite16(registers.SP, registers.PC);
+            mmu.write16(registers.SP, registers.PC);
             registers.PC = targetAddress;
             break;
         }
         case primaryGroupNames.return:
-            registers.PC = memoryRead16(registers.SP);
+            registers.PC = mmu.read16(registers.SP);
             registers.SP += 2;
             if(opcode === 0xD9){
                 cpuState.interruptsEnabled = true;
@@ -1047,17 +1047,17 @@ function tick(cpuState){
             break;
         case primaryGroupNames.callImmediate16:
         {
-            const func = memoryRead16(registers.PC);
+            const func = mmu.read16(registers.PC);
             registers.PC += 2;
             registers.SP -= 2;
-            memoryWrite16(registers.SP, registers.PC);
+            mmu.write16(registers.SP, registers.PC);
             registers.PC = func;
             break;
         }
         case primaryGroupNames.addCarryImmediate8ToAccum: // ADC A,n
         {
             const prev = registers.A;
-            const result = prev + memory[registers.PC++] + (registers.flagC ? 1 : 0);
+            const result = prev + mmu.read(registers.PC++) + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagC = (result > 0xFF);
@@ -1068,7 +1068,7 @@ function tick(cpuState){
         case primaryGroupNames.subImmediate8FromAccum: // SUB n
         {
             const prev = registers.A;
-            const diff = prev - memory[registers.PC++];
+            const diff = prev - mmu.read(registers.PC++);
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
@@ -1080,7 +1080,7 @@ function tick(cpuState){
         case primaryGroupNames.subCarryImmediate8FromAccum: // SBC A,n
         {
             const prev = registers.A;
-            const diff = prev - (memory[registers.PC++] + (registers.flagC ? 1 : 0));
+            const diff = prev - (mmu.read(registers.PC++) + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
@@ -1090,15 +1090,15 @@ function tick(cpuState){
             break;
         }
         case primaryGroupNames.ioPortWriteImmediate8:
-            memory[0xFF00 + memory[registers.PC++]] = registers.A;
+            mmu.write(0xFF00 + mmu.read(registers.PC++), registers.A);
             break;
         case primaryGroupNames.ioPortWriteRegister8:
-            memory[0xFF00 + registers.C] = registers.A;
+            mmu.write(0xFF00 + registers.C, registers.A);
             break;
         case primaryGroupNames.andImmediate8WithAccum: // AND n
         {
             const prev = registers.A;
-            const result = prev & memory[registers.PC++];
+            const result = prev & mmu.read(registers.PC++);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagC = false;
@@ -1109,7 +1109,7 @@ function tick(cpuState){
         case primaryGroupNames.addImmediate8ToStackPtr:
         {
             const prev = registers.SP;
-            const immediate = uint8ToInt8(memory[registers.PC++]);
+            const immediate = uint8ToInt8(mmu.read(registers.PC++));
             const result = prev + immediate;
             registers.SP = (result < 0 ? result + 0x10000 : result & 0xFFFF);
             registers.flagZ = false;
@@ -1123,15 +1123,15 @@ function tick(cpuState){
             break;
         case primaryGroupNames.loadRegisterToImmediate16Ptr:
         {
-            const addr = memoryRead16(registers.PC);
+            const addr = mmu.read16(registers.PC);
             registers.PC += 2;
-            memory[addr] = registers.A;
+            mmu.write(addr, registers.A);
             break;
         }
         case primaryGroupNames.xorImmediate8WithAccum: // XOR n
         {
             const prev = registers.A;
-            const result = prev ^ memory[registers.PC++];
+            const result = prev ^ mmu.read(registers.PC++);
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -1140,10 +1140,10 @@ function tick(cpuState){
             break;
         }
         case primaryGroupNames.ioPortReadImmediate8:
-            registers.A = memory[0xFF00 + memory[registers.PC++]];
+            registers.A = mmu.read(0xFF00 + mmu.read(registers.PC++));
             break;
         case primaryGroupNames.ioPortReadRegister8:
-            registers.A = memory[0xFF00 + registers.C];
+            registers.A = mmu.read(0xFF00 + registers.C);
             break;
         case primaryGroupNames.disableInterrupts:
             cpuState.interruptsEnabled = false;
@@ -1151,7 +1151,7 @@ function tick(cpuState){
         case primaryGroupNames.orImmediate8WithAccum: // OR n
         {
             const prev = registers.A;
-            const result = prev | memory[registers.PC++];
+            const result = prev | mmu.read(registers.PC++);
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -1162,7 +1162,7 @@ function tick(cpuState){
         case primaryGroupNames.addImmediate8ToStackPtrToRegister16: // LDHL SP,n
         {
             const prev = registers.SP;
-            const sum = prev + uint8ToInt8(memory[registers.PC++]);
+            const sum = prev + uint8ToInt8(mmu.read(registers.PC++));
             const result = sum < 0 ? sum + 0x10000 : sum & 0xFFFF;
             registers.HL = result;
             registers.flagZ = false;
@@ -1175,7 +1175,7 @@ function tick(cpuState){
             registers.SP = registers.HL;
             break;
         case primaryGroupNames.loadImmediate16PtrToRegister:
-            registers.A = memory[memoryRead16(registers.PC)];
+            registers.A = mmu.read(mmu.read16(registers.PC));
             registers.PC += 2;
             break;
         case primaryGroupNames.enableInterrupts:
@@ -1184,7 +1184,7 @@ function tick(cpuState){
         case primaryGroupNames.compareImmediate8WithAccum: // CP n
         {
             const prev = registers.A;
-            const result = prev - memory[registers.PC++];
+            const result = prev - mmu.read(registers.PC++);
             registers.flagZ = (result === 0);
             registers.flagN = true;
             registers.flagH = (prev & 0xF) < (result & 0xF);
@@ -1196,11 +1196,11 @@ function tick(cpuState){
             throw new Error();
             registers.PC += opcodeGroup.byteCount - 1;
     }
-    
+    /*
     if(Array.isArray(cycleIncrement)){
         console.warn("Conditional cycle count not resolved", opcodeGroup);
         cycleIncrement = cycleIncrement[0];
-    }
+    }*/
     return cycleIncrement;
 }
 
@@ -1220,48 +1220,48 @@ class CPU {
         // since these callbacks trip other things they're dispatched regardless
         gpu.onVblank((gpuInterruptEnabled) =>{
             //vblank interrupt
-            if(memory[0xFFFF] & 0x1){
-                memory[0xFF0F] |= 0x1;
+            if(mmu.read(0xFFFF) & 0x1){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x1);
             }
             //stat interrupt
-            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
-                memory[0xFF0F] |= 0x2;
+            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
             }
         });
         gpu.onHblank((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
-                memory[0xFF0F] |= 0x2;
+            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
             }
         });
         gpu.onLyc((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
-                memory[0xFF0F] |= 0x2;
+            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
             }
         });
         gpu.onOam((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
-                memory[0xFF0F] |= 0x2;
+            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
             }
         });
     }
     registerJoypadCallbacks(joypad){
         joypad.onButtonDown((buttonInterruptEnabled) => {
-            if(buttonInterruptEnabled && memory[0xFFFF] & 0x10){
-                memory[0xFF0F] |= 0x10;
+            if(buttonInterruptEnabled && mmu.read(0xFFFF) & 0x10){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x10);
             }
         });
     }
     registerTimerCallbacks(timer){
         timer.onCounterOverflow(() => {
-            if(memory[0xFFFF] & 0x4){
-                memory[0xFF0F] |= 0x4;
+            if(mmu.read(0xFFFF) & 0x4){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x4);
             }
         });
     }
     registerSerialCallbacks(serial){
         serial.onTransfer(() => {
-            if(memory[0xFFFF] & 0x8){
-                memory[0xFF0F] |= 0x8;
+            if(mmu.read(0xFFFF) & 0x8){
+                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x8);
             }
         });
     }

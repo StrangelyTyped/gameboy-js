@@ -46,7 +46,7 @@ function buildPaletteMap(palette){
 export default class GraphicsPipeline {
     #canvas;
     #imageData;
-    #memory;
+    #mmu;
     #registerData;
     #tickCounter = 0;
     #scanlineParams;
@@ -114,8 +114,8 @@ export default class GraphicsPipeline {
         this.#callbacks.hblank.push(callback);
     }
     
-    mapMemory(memory){
-        this.#memory = memory;
+    mapMemory(mmu){
+        this.#mmu = mmu;
     }
     readRegister(register){
         if(logRegisters){
@@ -180,7 +180,7 @@ export default class GraphicsPipeline {
                 // This is supposed to take 160 cycles but we'll see
                 const sourceBase = (v << 8);
                 for(let i = 0; i < 0xA0; i++){
-                    this.#memory[0xFE00 + i] = this.#memory[sourceBase + i];
+                    this.#mmu.write(0xFE00 + i, this.#mmu.read(sourceBase + i));
                 }
                 break;
             }
@@ -211,13 +211,13 @@ export default class GraphicsPipeline {
         const spriteHeight = (this.#registerData.control & 0x4 ? 16 : 8);
     
         for(let i = 0; i < 0xA0; i+=4){
-            const spriteY = this.#memory[0xFE00 + i] - 16;
+            const spriteY = this.#mmu.read(0xFE00 + i) - 16;
             if(spriteY <= y && y - spriteY < spriteHeight){
                 spritesForRow.push({
-                    x: this.#memory[0xFE00 + i + 1] - 8,
+                    x: this.#mmu.read(0xFE00 + i + 1) - 8,
                     y: spriteY,
-                    tileId: this.#memory[0xFE00 + i + 2],
-                    flags: this.#memory[0xFE00 + i + 3],
+                    tileId: this.#mmu.read(0xFE00 + i + 2),
+                    flags: this.#mmu.read(0xFE00 + i + 3),
                 });
                 if(spritesForRow.length === 10){
                     break;
@@ -228,8 +228,8 @@ export default class GraphicsPipeline {
         return spritesForRow;
     }
     #readTile(buffer, bufferX, basePtr){
-        const b0 = this.#memory[basePtr];
-        const b1 = this.#memory[basePtr + 1];
+        const b0 = this.#mmu.read(basePtr);
+        const b1 = this.#mmu.read(basePtr + 1);
         for(let i = Math.max(0, -bufferX); i < 8 && (bufferX + i) < buffer.length; i++){
             const p0 = (b0 & (1 << (7 - i))) ? 1 : 0;
             const p1 = (b1 & (1 << (7 - i))) ? 2 : 0;
@@ -249,7 +249,7 @@ export default class GraphicsPipeline {
 
         for(let x = -xTileShift; x < screenW; x+=8){
             const xTileOffs = ((x + this.#scanlineParams.scrollX)%256);
-            let bgTileId = this.#memory[bgTileMap + (32 * Math.floor(bgY/8)) + Math.floor(xTileOffs/8)];
+            let bgTileId = this.#mmu.read(bgTileMap + (32 * Math.floor(bgY/8)) + Math.floor(xTileOffs/8));
             if(!bgTileDataAddressingMode){
                 bgTileId = uint8ToInt8(bgTileId);
             }
@@ -280,7 +280,7 @@ export default class GraphicsPipeline {
             if(x < 0){
                 continue;
             }
-            let tileId = this.#memory[tileMap + (32 * Math.floor((y - windowY)/8)) + Math.floor((x - windowX)/8)];
+            let tileId = this.#mmu.read(tileMap + (32 * Math.floor((y - windowY)/8)) + Math.floor((x - windowX)/8));
             if(!tileDataAddressingMode){
                 tileId = uint8ToInt8(tileId);
             }
@@ -313,8 +313,8 @@ export default class GraphicsPipeline {
             
             const tileBase = 0x8000 + (sprites[i].tileId * 16) + (yOfsInSprite * 2);
 
-            const b0 = this.#memory[tileBase];
-            const b1 = this.#memory[tileBase + 1];
+            const b0 = this.#mmu.read(tileBase);
+            const b1 = this.#mmu.read(tileBase + 1);
             const startingX = x - sprites[i].x;
             const flipX = sprites[i].flags & 0x20;
             
@@ -385,15 +385,15 @@ export default class GraphicsPipeline {
         const buffer = this.#debugData.data;
         for(let y = 0; y < 256; y++){
             for(let x = 0; x < 256; x+=8){
-                let bgTileId = this.#memory[bgTileMap + (32 * Math.floor(y/8)) + Math.floor(x/8)];
+                let bgTileId = this.#mmu.read(bgTileMap + (32 * Math.floor(y/8)) + Math.floor(x/8));
                 if(!bgTileDataAddressingMode){
                     bgTileId = uint8ToInt8(bgTileId);
                 }
                 const tileBase = bgTileData + (bgTileId * 16);
                 const basePtr = tileBase + ((y % 8) * 2);
 
-                const b0 = this.#memory[basePtr];
-                const b1 = this.#memory[basePtr + 1];
+                const b0 = this.#mmu.read(basePtr);
+                const b1 = this.#mmu.read(basePtr + 1);
                 for(let i = 0; i < 8; i++){
                     const p0 = (b0 & (1 << (7 - i))) ? 1 : 0;
                     const p1 = (b1 & (1 << (7 - i))) ? 2 : 0;
