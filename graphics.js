@@ -259,7 +259,34 @@ export default class GraphicsPipeline {
     }
     #fillWinLayer(){
         // window -1 for 'no window here'
-        this.#layerBuffers.win.fill(-1);
+        const y = this.#registerData.y;
+        const windowY = this.#scanlineParams.windowY;
+        const buffer = this.#layerBuffers.win;
+
+        if(y < windowY){
+            buffer.fill(-1);
+            return;
+        }
+
+        const windowX = this.#scanlineParams.windowX - 7;
+
+        const tileDataAddressingMode = (this.#registerData.control & 0x10) ? 1 : 0;
+        const tileData = tileDataAddressingMode ? 0x8000 : 0x9000;
+        const tileMap = (this.#registerData.control & 0x40) ? 0x9C00 : 0x9800;
+
+        buffer.fill(-1, 0, Math.max(windowX, 0));
+
+        for(let x = windowX; x < screenW; x+=8){
+            if(x < 0){
+                continue;
+            }
+            let tileId = this.#memory[tileMap + (32 * Math.floor((y - windowY)/8)) + Math.floor((x - windowX)/8)];
+            if(!tileDataAddressingMode){
+                tileId = uint8ToInt8(tileId);
+            }
+            const tileBase = tileData + (tileId * 16);
+            this.#readTile(buffer, x, tileBase + (((y - windowY) % 8) * 2));
+        }
     }
     #fillSpriteLayer(){
         const y = this.#registerData.y;
