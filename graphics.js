@@ -379,6 +379,44 @@ export default class GraphicsPipeline {
         this.#debugCanvas.putImageData(this.#debugData, 0, 0);
     }
 
+    #setMode(mode){
+        this.#registerData.mode = mode;
+        switch(mode){
+            case MODE_SEARCH_OAM:
+            {
+                this.#scanlineParams.scrollX = this.#registerData.scrollX;
+                this.#scanlineParams.scrollY = this.#registerData.scrollY;
+                this.#scanlineParams.windowX = this.#registerData.windowX;
+                this.#scanlineParams.windowY = this.#registerData.windowY;
+                const oamInterruptEnabled = (this.#registerData.interruptFlags & 0x20) > 0
+                this.#callbacks.oam.forEach(cb => cb(oamInterruptEnabled));
+                break;
+            }
+            case MODE_DRAW_LINE:
+                break;
+            case MODE_HBLANK:
+            {
+                const hblankInterruptEnabled = (this.#registerData.interruptFlags & 0x8) > 0;
+                this.#callbacks.hblank.forEach(cb => cb(hblankInterruptEnabled));
+                break;
+            }
+            case MODE_VBLANK:
+            {
+                const vblankInterruptEnabled = (this.#registerData.interruptFlags & 0x10) > 0;
+                this.#callbacks.vblank.forEach(cb => cb(vblankInterruptEnabled));
+                break;
+            }
+        }
+    }
+
+    #incrementY(){
+        this.#registerData.y++;
+        if(this.#registerData.y === this.#registerData.yCompare){
+            const lycInterruptEnabled = (this.#registerData.interruptFlags & 0x40) > 0;
+            this.#callbacks.lyc.forEach(cb => cb(lycInterruptEnabled));
+        }
+    }
+
     tick(cycles){
         if(!(this.#registerData.control & 0x80)){
             // LCD disabled
@@ -391,7 +429,7 @@ export default class GraphicsPipeline {
                 case MODE_SEARCH_OAM:
                     if(this.#tickCounter > 80){
                         this.#tickCounter -= 80;
-                        this.#registerData.mode = MODE_DRAW_LINE; 
+                        this.#setMode(MODE_DRAW_LINE);
                     }else{
                         running = false;
                     }
@@ -399,9 +437,7 @@ export default class GraphicsPipeline {
                 case MODE_DRAW_LINE:
                     if(this.#tickCounter > 180){
                         this.#tickCounter -= 180;
-                        this.#registerData.mode = MODE_HBLANK;
-                        const hblankInterruptEnabled = (this.#registerData.interruptFlags & 0x8) > 0
-                        this.#callbacks.hblank.forEach(cb => cb(hblankInterruptEnabled));
+                        this.#setMode(MODE_HBLANK);
                         this.#draw();
                     } else {
                         running = false;
@@ -410,21 +446,11 @@ export default class GraphicsPipeline {
                 case MODE_HBLANK:
                     if(this.#tickCounter > 196){
                         this.#tickCounter -= 196;
-                        this.#registerData.y++;
-                        if(this.#registerData.y === this.#registerData.yCompare){
-                            const lycInterruptEnabled = (this.#registerData.interruptFlags & 0x40) > 0
-                            this.#callbacks.lyc.forEach(cb => cb(lycInterruptEnabled));
-                        }
+                        this.#incrementY();
                         if(this.#registerData.y >= screenH){
-                            this.#registerData.mode = MODE_VBLANK;
-                            const vblankInterruptEnabled = (this.#registerData.interruptFlags & 0x10) > 0
-                            this.#callbacks.vblank.forEach(cb => cb(vblankInterruptEnabled));
+                            this.#setMode(MODE_VBLANK);
                         } else {
-                            this.#registerData.mode = MODE_SEARCH_OAM;
-                            this.#scanlineParams.scrollX = this.#registerData.scrollX;
-                            this.#scanlineParams.scrollY = this.#registerData.scrollY;
-                            this.#scanlineParams.windowX = this.#registerData.windowX;
-                            this.#scanlineParams.windowY = this.#registerData.windowY;
+                            this.#setMode(MODE_SEARCH_OAM);
                         }
                     } else {
                         running = false;
@@ -433,16 +459,10 @@ export default class GraphicsPipeline {
                 case MODE_VBLANK:
                     if(this.#tickCounter > 456){
                         this.#tickCounter -= 456;
-                        this.#registerData.y++;
+                        this.#incrementY();
                         if(this.#registerData.y >= screenScanH){
                             this.#registerData.y = 0;
-                            this.#registerData.mode = MODE_SEARCH_OAM;
-                            this.#scanlineParams.scrollX = this.#registerData.scrollX;
-                            this.#scanlineParams.scrollY = this.#registerData.scrollY;
-                            this.#scanlineParams.windowX = this.#registerData.windowX;
-                            this.#scanlineParams.windowY = this.#registerData.windowY;
-                            const oamInterruptEnabled = (this.#registerData.interruptFlags & 0x20) > 0
-                            this.#callbacks.oam.forEach(cb => cb(oamInterruptEnabled));
+                            this.#setMode(MODE_SEARCH_OAM);
                             this.#debugDrawBgMap();
                         }
                     } else {
