@@ -43,14 +43,17 @@ gpu.onVblank(() => {
     waitingForVsync = false;
 })
 
-function run(){
+function run(elapsed){
     const tickStart = performance.now();
     waitingForVsync = true;
-    while(waitingForVsync){
-        const elapsed = cpu.tick();
-        gpu.tick(elapsed);
-        timer.tick(elapsed);
-        serial.tick(elapsed);
+    // If we run for more than 32ms of emulated CPU cycles then something's gone wrong, back off
+    let targetCycles = 4194.304 * Math.min(32, elapsed);
+    while(waitingForVsync && targetCycles > 0){
+        const simulatedCycles = cpu.tick();
+        gpu.tick(simulatedCycles);
+        timer.tick(simulatedCycles);
+        serial.tick(simulatedCycles);
+        targetCycles -= simulatedCycles;
     }
     requestAnimationFrame(run);
     const rtElapsed = performance.now() - tickStart;
@@ -58,4 +61,4 @@ function run(){
     browserFps.update();
     fps.innerText = browserFps.getCount() + "/" + gpuFps.getCount();
 }
-run();
+requestAnimationFrame(run);
