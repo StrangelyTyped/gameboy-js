@@ -385,15 +385,15 @@ export default class GraphicsPipeline {
         switch(mode){
             case MODE_SEARCH_OAM:
             {
-                this.#scanlineParams.scrollX = this.#registerData.scrollX;
-                this.#scanlineParams.scrollY = this.#registerData.scrollY;
-                this.#scanlineParams.windowX = this.#registerData.windowX;
-                this.#scanlineParams.windowY = this.#registerData.windowY;
                 const oamInterruptEnabled = (this.#registerData.interruptFlags & 0x20) > 0
                 this.#callbacks.oam.forEach(cb => cb(oamInterruptEnabled));
                 break;
             }
             case MODE_DRAW_LINE:
+                this.#scanlineParams.scrollX = this.#registerData.scrollX;
+                this.#scanlineParams.scrollY = this.#registerData.scrollY;
+                this.#scanlineParams.windowX = this.#registerData.windowX;
+                this.#scanlineParams.windowY = this.#registerData.windowY;
                 break;
             case MODE_HBLANK:
             {
