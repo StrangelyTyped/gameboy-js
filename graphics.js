@@ -347,7 +347,7 @@ export default class GraphicsPipeline {
         }
 
         const bgPalette = this.#registerData.bgPaletteMap;
-        const spritePalette = [this.#registerData.obj0PaletteMap, this.#registerData.obj0PaletteMap];
+        const spritePalette = [this.#registerData.obj0PaletteMap, this.#registerData.obj1PaletteMap];
 
         const imageData = this.#imageData;
         for(let x = 0; x < screenW; x++){
@@ -357,7 +357,7 @@ export default class GraphicsPipeline {
             const spriteFlags = this.#layerBuffers.objFlags[x];
             let pixel = 0;
             if(spritesEnabled && spritePix){
-                if(spriteFlags & 0x80 && winPix != 0){
+                if(spriteFlags & 0x80 && winPix > 0){
                     pixel = bgPalette[winPix];
                 } else if(spriteFlags & 0x80 && bgPix != 0){
                     pixel = bgPalette[bgPix];
