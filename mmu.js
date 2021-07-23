@@ -41,6 +41,7 @@ class MBC1 {
             }else{
                 this.#activeBanks.rom = this.#registers.ramBankRomBankNoHigh & getBankMask(this.#romBankCount);
             }
+            this.#activeBanks.rom2 = this.#registers.romBankNoLow & getBankMask(this.#romBankCount);
         }
     }
     romWrite(addr, v){
@@ -54,7 +55,6 @@ class MBC1 {
             case 0x2000:
             case 0x3000:
                 //ROM Bank no
-                //TODO: docs say the 1F mask should be proportionate to number of available banks
                 this.#registers.romBankNoLow = (v & 0x1F) || 0x1;
                 this.setBanks();
                 break;
