@@ -1135,50 +1135,48 @@ class CPU {
         // first arg to each callback is whether the interrupt is enabled on the gpu STAT register
         // since these callbacks trip other things they're dispatched regardless
         gpu.onVblank((gpuInterruptEnabled) =>{
-            if(this.#cpuState.interruptsEnabled){
-                //vblank interrupt
-                if(memory[0xFFFF] & 0x1){
-                    memory[0xFF0F] |= 0x1;
-                }
-                //stat interrupt
-                if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
-                    memory[0xFF0F] |= 0x2;
-                }
+            //vblank interrupt
+            if(memory[0xFFFF] & 0x1){
+                memory[0xFF0F] |= 0x1;
+            }
+            //stat interrupt
+            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
+                memory[0xFF0F] |= 0x2;
             }
         });
         gpu.onHblank((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x2){
+            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
                 memory[0xFF0F] |= 0x2;
             }
         });
         gpu.onLyc((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x2){
+            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
                 memory[0xFF0F] |= 0x2;
             }
         });
         gpu.onOam((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x2){
+            if(gpuInterruptEnabled && memory[0xFFFF] & 0x2){
                 memory[0xFF0F] |= 0x2;
             }
         });
     }
     registerJoypadCallbacks(joypad){
         joypad.onButtonDown((buttonInterruptEnabled) => {
-            if(buttonInterruptEnabled && this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x10){
+            if(buttonInterruptEnabled && memory[0xFFFF] & 0x10){
                 memory[0xFF0F] |= 0x10;
             }
         });
     }
     registerTimerCallbacks(timer){
         timer.onCounterOverflow(() => {
-            if(this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x4){
+            if(memory[0xFFFF] & 0x4){
                 memory[0xFF0F] |= 0x4;
             }
         });
     }
     registerSerialCallbacks(serial){
         serial.onTransfer(() => {
-            if(this.#cpuState.interruptsEnabled && memory[0xFFFF] & 0x8){
+            if(memory[0xFFFF] & 0x8){
                 memory[0xFF0F] |= 0x8;
             }
         });
