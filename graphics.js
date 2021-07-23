@@ -278,12 +278,13 @@ export default class GraphicsPipeline {
                 break;
             }
             
-            //TODO: flipY
+            // flipY
+            let yOfsInSprite = y - sprites[i].y;
             if(sprites[i].flags & 0x40){
-                //console.warn("Unsupported sprite flipY flag", sprites[i]);
+                yOfsInSprite = ((this.#registerData.control & 0x4) ? 16 : 8) - (yOfsInSprite + 1);
             }
             
-            const tileBase = 0x8000 + (sprites[i].tileId * 16) + ((y - sprites[i].y) * 2);
+            const tileBase = 0x8000 + (sprites[i].tileId * 16) + (yOfsInSprite * 2);
 
             const b0 = this.#memory[tileBase];
             const b1 = this.#memory[tileBase + 1];
