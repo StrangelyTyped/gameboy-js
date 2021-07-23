@@ -45,10 +45,56 @@ function extendedTick(){
         console.log("Extended Opcode", opcode, opcodeGroup.name);
     }
     switch(opcodeGroup.groupId){
-        // case rotateLeft
-        // case rotateLeftPtr
-        // case rotateRight
-        // case rotateRightPtr
+        case extendedGroupNames.rotateLeft:
+        {
+            const register = getStandardRegisterLow3(opcode);
+            const prev = registers[register];
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF) | (carry ? 1 : 0);
+            registers[register] = result;
+            registers.flagC = carry;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false;
+            break;
+        }
+        case extendedGroupNames.rotateLeftPtr:
+        {
+            const prev = memory[registers.HL];
+            const carry = (prev & 0x80) !== 0;
+            const result = ((prev << 1) & 0xFF) | (carry ? 1 : 0);
+            memory[registers.HL] = result;
+            registers.flagC = carry;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false;
+            break;
+        }
+        case extendedGroupNames.rotateRight:
+        {
+            const register = getStandardRegisterLow3(opcode);
+            const prev = registers[register];
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1) | (carry ? 0x80 : 0x00);
+            registers[register] = result;
+            registers.flagC = carry;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false;
+            break;
+        }
+        case extendedGroupNames.rotateRightPtr:
+        {
+            const prev = memory[registers.HL];
+            const carry = (prev & 0x01) !== 0;
+            const result = (prev >> 1) | (carry ? 0x80 : 0x00);
+            memory[registers.HL] = result;
+            registers.flagC = carry;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false;
+            break;
+        }
         case extendedGroupNames.rotateLeftCarry:
         {
             const register = getStandardRegisterLow3(opcode);
@@ -124,8 +170,33 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        // case shiftRight
-        // case shiftRightPtr
+        case extendedGroupNames.shiftRight:
+        {
+            const register = getStandardRegisterLow3(opcode);
+            const prev = registers[register];
+            const carry = (prev & 0x01) !== 0;
+            const msb = (prev & 0x80);
+            const result = ((prev >> 1) & 0xFF) | msb;
+            registers[register] = result;
+            registers.flagC = carry;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false;
+            break;
+        }
+        case extendedGroupNames.shiftRightPtr:
+        {
+            const prev = memory[registers.HL];
+            const carry = (prev & 0x01) !== 0;
+            const msb = (prev & 0x80);
+            const result = ((prev >> 1) & 0xFF) | msb;
+            memory[registers.HL] = result;
+            registers.flagC = carry;
+            registers.flagZ = (result === 0);
+            registers.flagN = false;
+            registers.flagH = false;
+            break;
+        }
         case extendedGroupNames.swap:
         {
             const register = getStandardRegisterLow3(opcode);
@@ -1035,7 +1106,18 @@ function tick(cpuState){
             registers.flagH = true; // known good 
             break;
         }
-        // case addImmediate8ToStackPtr
+        case primaryGroupNames.addImmediate8ToStackPtr:
+        {
+            const prev = registers.SP;
+            const immediate = uint8ToInt8(memory[registers.PC++]);
+            const result = prev + immediate;
+            registers.SP = (result < 0 ? result + 0x10000 : result & 0xFFFF);
+            registers.flagZ = false;
+            registers.flagN = false;
+            registers.flagC = (result < 0) || (result > 0xFFFF);
+            registers.flagH = (immediate < 0 ? (prev & 0xF) < (result & 0xF) : (prev & 0xF) > (result & 0xF)); // guessing?
+            break;
+        }
         case primaryGroupNames.jumpPtr:
             registers.PC = registers.HL;
             break;
@@ -1089,7 +1171,9 @@ function tick(cpuState){
             registers.flagH = (prev & 0xF) > (result & 0xF);
             break;
         }
-        // case loadRegister16ToStackPtr
+        case primaryGroupNames.loadRegister16ToStackPtr:
+            registers.SP = registers.HL;
+            break;
         case primaryGroupNames.loadImmediate16PtrToRegister:
             registers.A = memory[memoryRead16(registers.PC)];
             registers.PC += 2;
