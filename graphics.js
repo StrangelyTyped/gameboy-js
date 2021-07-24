@@ -362,7 +362,7 @@ export default class GraphicsPipeline {
                 } else if(spriteFlags & 0x80 && bgPix != 0){
                     pixel = bgPalette[bgPix];
                 } else {
-                    pixel = spritePalette[spriteFlags & 0x10 >> 4][spritePix];
+                    pixel = spritePalette[(spriteFlags & 0x10) >> 4][spritePix];
                 }
             } else if(windowEnabled && winPix !== -1){
                 pixel = bgPalette[winPix];
