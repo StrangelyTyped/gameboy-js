@@ -94,6 +94,7 @@ class MMU {
     #joypad;
     #timer;
     #serial;
+    #audio;
     constructor(){
         this.#banks = {
             bootRom: makeBuffer(0x100),
@@ -170,11 +171,12 @@ class MMU {
                                 return this.#banks.interruptFlagRegister;
                             } else if(addr >= 0xFF40 && addr <= 0xFF4B){
                                 return this.#gpu.readRegister(addr);
-                            } else if(addr >= 0xFF30 && addr <= 0xFF3F){
-                                //wave ram
-                                return 0;
-                            } else if(addr >= 0xFF10 && addr <= 0xFF26){
-                                //Sound device, ignore for now
+                            } else if(addr >= 0xFF10 && addr <= 0xFF3F){
+                                //Sound device
+                                if(this.#audio){
+                                    return this.#audio.readRegister(addr);
+                                }
+                                return 0xFF;
                             } else if(addr >= 0xFF04 && addr <= 0xFF07){
                                 if(this.#timer){
                                     return this.#timer.readRegister(addr);
@@ -194,11 +196,11 @@ class MMU {
                                 return 0x8;
                             } else if(addr === 0xFF7F){
                                 // No idea what this is - not documented
-                            }else{
+                            } else{
                                 console.warn("Unhandled IO Register read", addr);
                             }
                         }
-                        return 0;
+                        return 0xFF;
                     default:
                         return this.#banks.wram[this.#activeBanks.wram2][addr - 0xF000];
                 }
@@ -251,13 +253,14 @@ class MMU {
                             //IO Registers
                             if(addr >= 0xFF40 && addr <= 0xFF4B){
                                 this.#gpu.writeRegister(addr, val);
-                            } else if(addr >= 0xFF30 && addr <= 0xFF3F){
-                                //wave ram
+                            } else if(addr >= 0xFF10 && addr <= 0xFF3F){
+                                // Sound device
+                                if(this.#audio){
+                                    this.#audio.writeRegister(addr, val);
+                                }
                             } else if(addr === 0xFF0F){
                                 // interrupt flag register
                                 this.#banks.interruptFlagRegister = val;
-                            } else if(addr >= 0xFF10 && addr <= 0xFF26){
-                                //Sound device, ignore for now
                             } else if(addr >= 0xFF04 && addr <= 0xFF07){
                                 if(this.#timer){
                                     this.#timer.writeRegister(addr, val);
@@ -393,6 +396,9 @@ class MMU {
     }
     mapSerial(serial){
         this.#serial = serial;
+    }
+    mapAudio(audio){
+        this.#audio = audio;
     }
 }
 

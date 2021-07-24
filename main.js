@@ -4,6 +4,7 @@ import rom from './mario1.mjs';
 import JoypadKeyboard from "./joypad-keyboard.js";
 import Timer from "./timer.js";
 import Serial from "./serial.js";
+import Audio from "./audio.js";
 import mmu from "./mmu.js";
 import GraphicsPipeline from "./graphics.js";
 
@@ -31,6 +32,9 @@ const serial = new Serial();
 mmu.mapSerial(serial);
 cpu.registerSerialCallbacks(serial);
 
+const audio = new Audio();
+mmu.mapAudio(audio);
+
 const frameTime = document.getElementById("frametime");
 const fps = document.getElementById("fpsCounter");
 
@@ -53,6 +57,7 @@ function run(elapsed){
         gpu.tick(simulatedCycles);
         timer.tick(simulatedCycles);
         serial.tick(simulatedCycles);
+        audio.tick(simulatedCycles);
         targetCycles -= simulatedCycles;
     }
     requestAnimationFrame(run);
