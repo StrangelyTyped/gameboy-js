@@ -7,6 +7,40 @@ function getBankMask(bankCount){
     return bankMask;
 }
 
+function readString(data, startIdx, maxLength){
+    let str = "";
+    for(let i = startIdx; i < startIdx + maxLength; i++){
+        let byte = data[i];
+        if(i === 0){
+            break;
+        }
+        str += String.fromCharCode(byte);
+    }
+    return str;
+}
+
+class RamPersistence{
+    #cartridgeName;
+    #bankCount;
+    constructor(cartridgeName, ramBankCount){
+        this.#cartridgeName = cartridgeName;
+        this.#bankCount = ramBankCount;
+    }
+    loadRamBanks(){
+        let banks = [];
+        try {
+            banks = JSON.parse(window.localStorage.getItem(this.#cartridgeName)) || [];
+        } catch (e){}
+        while(banks.length < this.#bankCount){
+            banks.push(makeBuffer(0x2000));
+        }
+        return banks;
+    }
+    saveRamBanks(banks){
+        window.localStorage.setItem(this.#cartridgeName, JSON.stringify(banks));
+    }
+}
+
 class RomOnlyMbc {
     constructor(activeBanks){}
     romWrite(addr, v){
@@ -19,7 +53,8 @@ class MBC1 {
     #registers;
     #romBankCount;
     #ramBankCount;
-    constructor(activeBanks, romBanks, ramBanks){
+    #saveRamFunc;
+    constructor(activeBanks, romBanks, ramBanks, saveRamFunc){
         this.#activeBanks = activeBanks;
         this.#registers = {
             ramEnable: 0,
@@ -29,6 +64,7 @@ class MBC1 {
         };
         this.#romBankCount = romBanks;
         this.#ramBankCount = ramBanks;
+        this.#saveRamFunc = saveRamFunc;
     }
     setBanks(){
         if(this.#registers.bankMode === 0){
@@ -49,8 +85,10 @@ class MBC1 {
             case 0x0000:
             case 0x1000:
                 //RAM enable
-                // We don't need to worry about actually disabling ram - it's not hardware
                 this.#registers.ramEnable = (v & 0xF) == 0xA ? 1 : 0;
+                if(!this.#registers.ramEnable){
+                    this.#saveRamFunc();
+                }
                 break;
             case 0x2000:
             case 0x3000:
@@ -291,7 +329,7 @@ class MMU {
         }
     }
 
-    setCartridgeType(cartTypeId, romTypeId, ramTypeId){
+    setCartridgeType(cartTypeId, romTypeId, ramTypeId, cartridgeName = "UNKNOWN"){
         switch(romTypeId){
             case 0x00:
             case 0x01:
@@ -340,9 +378,11 @@ class MMU {
                 this.#ramBankCount = 2;
                 console.warn("Unknown RAM type ID", ramTypeId);
         }
-        while(this.#banks.nvEram < this.#ramBankCount){
-            this.#banks.nvEram.push(makeBuffer(0x2000));
-        }
+        
+        const ramPersistence = new RamPersistence(cartridgeName, this.#ramBankCount);
+        let hasPersistentRam = false;
+        const saveRam = () => ramPersistence.saveRamBanks(this.#banks.nvEram);
+        const dummySaveRam = () => {};
         switch(cartTypeId){
             case 0x00:
                 this.#mbc = new RomOnlyMbc(this.#activeBanks);
@@ -350,13 +390,27 @@ class MMU {
             case 0x01:
             case 0x02:
             case 0x03:
-                this.#mbc = new MBC1(this.#activeBanks, this.#romBankCount, this.#ramBankCount);
+                hasPersistentRam = cartTypeId === 0x3;
+                this.#mbc = new MBC1(this.#activeBanks, this.#romBankCount, this.#ramBankCount, hasPersistentRam ? saveRam : dummySaveRam);
                 break;
             default:
                 console.warn("Unimplemented MBC type", cartTypeId);
-                this.#mbc = new RomOnlyMbc(this.#activeBanks);
+                //this.#mbc = new RomOnlyMbc(this.#activeBanks);
+                throw new Error();
         }
+
+        if(hasPersistentRam){
+            this.#banks.nvEram = ramPersistence.loadRamBanks();
+            this.saveRam = saveRam;
+        } else {
+            this.saveRam = dummySaveRam;
+        }
+        while(this.#banks.nvEram < this.#ramBankCount){
+            this.#banks.nvEram.push(makeBuffer(0x2000));
+        }
+    
     }
+    saveRam(){}
     read16(addr){
         return this.read(addr) | (this.read(addr + 1) << 8);
     }
@@ -372,7 +426,7 @@ class MMU {
             data = data.concat(pad);
         }
         if(index === 0){
-            this.setCartridgeType(data[0x147], data[0x148], data[0x149]);
+            this.setCartridgeType(data[0x147], data[0x148], data[0x149], readString(data, 0x0134, 11));
         }
         this.#banks.rom[index] = data;
     }

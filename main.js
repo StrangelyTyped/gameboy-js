@@ -15,6 +15,7 @@ import { FpsCounter } from "./utils.js"
 
 mmu.mapBootRom(bios);
 mmu.loadCartridge(rom);
+window.addEventListener("beforeunload", () => mmu.saveRam());
 
 const gpu = new GraphicsPipeline(document.getElementById("screen"));
 mmu.mapGpuMemory(gpu);
