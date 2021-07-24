@@ -33,6 +33,8 @@ function getStandardRegisterOther(opcode){
     return standardOpcodeRegisterMappingOther[(opcode & 0x8) >> 3][(opcode & 0x30) >> 4];
 }
 
+let logInstructions = 0;
+
 function extendedTick(){
     const opcode = mmu.read(registers.PC++);
     //console.log("Extended opcode", opcode);
@@ -295,7 +297,6 @@ function extendedTick(){
 }
 
 
-let logInstructions = false;
 function tick(cpuState){
     if(logInstructions){
         console.log("Before", JSON.stringify(registers.values));
@@ -344,6 +345,7 @@ function tick(cpuState){
 
     if(logInstructions){
         console.log("Opcode", opcodeGroup.name, registers.PC);
+        logInstructions--;
     }
     // Some opcodes may need to override
     let cycleIncrement = opcodeGroup.cycleCount;
