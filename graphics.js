@@ -242,7 +242,7 @@ export default class GraphicsPipeline {
         const bgTileMap = (this.#registerData.control & 0x08) ? 0x9C00 : 0x9800;
 
         const y = this.#registerData.y;
-        const bgY = (y + this.#scanlineParams.scrollY % 256);
+        const bgY = (y + this.#scanlineParams.scrollY) % 256;
         const buffer = this.#layerBuffers.bg;
         buffer.fill(0);
         const xTileShift = this.#scanlineParams.scrollX % 8;
