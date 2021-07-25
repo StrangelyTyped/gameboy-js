@@ -1,8 +1,8 @@
 const dutyCycleMap = [
-    [-1, 1, 1, 1, 1, 1, 1, 1],
-    [-1, -1, 1, 1, 1, 1, 1, 1],
-    [-1, -1, -1, -1, 1, 1, 1, 1],
-    [-1, -1, -1, -1, -1, -1, 1, 1]
+    0.125,
+    0.25,
+    0.5,
+    0.75
 ];
 
 
@@ -19,9 +19,9 @@ class SquareWaveOscillator extends AudioWorkletProcessor {
             for (let i = 0; i < channel.length; i++) {
                 // a number from 0...cycleLength
                 const cyclePos = (currentFrame + i) % cycleLength;
-                // scale down to 0...8
-                const cycleIndex = (cyclePos / cycleLength) * dutyCycle.length;
-                channel[i] = Math.max(0, dutyCycle[Math.round(cycleIndex)]);
+
+                
+                channel[i] = ((cyclePos / cycleLength) < dutyCycle) ? -1 : 1;
             }
         });
         return true;
