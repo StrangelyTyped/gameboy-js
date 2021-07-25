@@ -117,6 +117,54 @@ class MBC1 {
     }
 }
 
+class MBC3 {
+    #activeBanks;
+    #registers;
+    #romBankCount;
+    #ramBankCount;
+    #saveRamFunc;
+    constructor(activeBanks, romBanks, ramBanks, saveRamFunc, hasRtc){
+        this.#activeBanks = activeBanks;
+        this.#registers = {
+            ramEnable: 0,
+            romBankNo: 1,
+            ramBankNo: 0,
+        };
+        this.#romBankCount = romBanks;
+        this.#ramBankCount = ramBanks;
+        this.#saveRamFunc = saveRamFunc;
+    }
+    romWrite(addr, v){
+        switch(addr & 0xF000){
+            case 0x0000:
+            case 0x1000:
+                //RAM enable
+                this.#registers.ramEnable = (v & 0xF) == 0xA ? 1 : 0;
+                if(!this.#registers.ramEnable){
+                    this.#saveRamFunc();
+                }
+                break;
+            case 0x2000:
+            case 0x3000:
+                //ROM Bank no
+                this.#registers.romBankNo = (v & 0xFF) || 0x1;
+                this.#activeBanks.rom2 = this.#registers.romBankNo & getBankMask(this.#romBankCount);
+                break;
+            case 0x4000:
+            case 0x5000:
+                // RAM bank no / RTC register select
+                this.#registers.ramBankNo = (v & 0x3);
+                this.#activeBanks.nvEram = this.#registers.ramBankNo & getBankMask(this.#ramBankCount);
+                break;
+            case 0x6000:
+            case 0x7000:
+                // RTC latch
+                break;
+        }
+        return v;
+    }
+}
+
 function makeBuffer(size){
     return new Array(size).fill(0);
 }
@@ -393,6 +441,17 @@ class MMU {
                 hasPersistentRam = cartTypeId === 0x3;
                 this.#mbc = new MBC1(this.#activeBanks, this.#romBankCount, this.#ramBankCount, hasPersistentRam ? saveRam : dummySaveRam);
                 break;
+            case 0x0F:
+            case 0x10:
+            case 0x11:
+            case 0x12:
+            case 0x13:
+            {
+                hasPersistentRam = (cartTypeId === 0x10 || cartTypeId === 0x13);
+                let hasRtc = (cartTypeId === 0x0F || cartTypeId === 0x10);
+                this.#mbc = new MBC3(this.#activeBanks, this.#romBankCount, this.#ramBankCount, hasPersistentRam ? saveRam : dummySaveRam, hasRtc);
+                break;
+            }
             default:
                 console.warn("Unimplemented MBC type", cartTypeId);
                 //this.#mbc = new RomOnlyMbc(this.#activeBanks);
