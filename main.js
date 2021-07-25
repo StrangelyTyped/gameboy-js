@@ -1,5 +1,5 @@
-import bios from "./gb_bios.mjs";
-import rom from './mario1.mjs';
+import bios from "./roms/gb_bios.js";
+import rom from './roms/mario1.js';
 
 import JoypadKeyboard from "./joypad-keyboard.js";
 import Timer from "./timer.js";

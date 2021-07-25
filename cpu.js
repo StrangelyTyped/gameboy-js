@@ -1,7 +1,7 @@
 import {primaryGroups, primaryGroupNames, extendedGroups, extendedGroupNames} from "./cpu-opcodes.js";
 import registers from "./cpu-registers.js";
 import mmu from "./mmu.js";
-import {uint8ToInt8} from "./memory-utils.js";
+import {uint8ToInt8} from "./utils.js";
 
 const standardOpcodeRegisterMappingLow3 = [
     "B",
@@ -29,7 +29,7 @@ const standardOpcodeRegisterMappingOther = [
         "A"
     ]
 ]
-function getStandardRegisterOther(opcode){
+function getStandardRegisterMid3(opcode){
     return standardOpcodeRegisterMappingOther[(opcode & 0x8) >> 3][(opcode & 0x30) >> 4];
 }
 
@@ -424,7 +424,7 @@ function tick(cpuState){
         }
         case primaryGroupNames.incrementRegister8: // INC n
         {
-            const register = getStandardRegisterOther(opcode);
+            const register = getStandardRegisterMid3(opcode);
             const prev = registers[register];
             const result = (prev + 1) & 0xFF;
             registers[register] = result;
@@ -436,7 +436,7 @@ function tick(cpuState){
         }
         case primaryGroupNames.decrementRegister8: // DEC n
         {
-            const register = getStandardRegisterOther(opcode);
+            const register = getStandardRegisterMid3(opcode);
             
             const prev = registers[register];
             const result = prev > 0 ? (prev - 1) : 0xFF;
@@ -448,7 +448,7 @@ function tick(cpuState){
         }
         case primaryGroupNames.loadImmediate8ToRegister:
         {
-            registers[getStandardRegisterOther(opcode)] = mmu.read(registers.PC++);
+            registers[getStandardRegisterMid3(opcode)] = mmu.read(registers.PC++);
             break;
         }
         case primaryGroupNames.rotateLeft: //RLCA
@@ -517,7 +517,7 @@ function tick(cpuState){
                 case 0x66:
                 case 0x6E:
                 case 0x7E:
-                    registers[getStandardRegisterOther(opcode)] = mmu.read(registers.HL);
+                    registers[getStandardRegisterMid3(opcode)] = mmu.read(registers.HL);
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
@@ -671,7 +671,7 @@ function tick(cpuState){
             registers.flagC = !registers.flagC;
             break;
         case primaryGroupNames.loadRegister8ToRegister8:
-            registers[getStandardRegisterOther(opcode)] = registers[getStandardRegisterLow3(opcode)];
+            registers[getStandardRegisterMid3(opcode)] = registers[getStandardRegisterLow3(opcode)];
             break;
         case primaryGroupNames.halt:
         {

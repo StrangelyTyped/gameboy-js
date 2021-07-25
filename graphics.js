@@ -1,4 +1,4 @@
-import {uint8ToInt8} from "./memory-utils.js";
+import {uint8ToInt8} from "./utils.js";
 
 const registerNames = {
     0xFF40: "LCD Control",
