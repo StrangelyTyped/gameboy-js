@@ -1,8 +1,7 @@
 import {primaryGroups, primaryGroupNames, extendedGroups, extendedGroupNames} from "./cpu-opcodes.js";
 import registers from "./cpu-registers.js";
-import mmu from "./mmu.js";
 import {uint8ToInt8} from "./utils.js";
-
+let mmu = null;
 const standardOpcodeRegisterMappingLow3 = [
     "B",
     "C",
@@ -1216,6 +1215,10 @@ class CPU {
     }
     tick(){
         return tick(this.#cpuState);
+    }
+    // Temporary hack
+    setMmu(mmuRef){
+        mmu = mmuRef;
     }
     registerGpuCallbacks(gpu){
         // first arg to each callback is whether the interrupt is enabled on the gpu STAT register

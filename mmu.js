@@ -169,7 +169,7 @@ function makeBuffer(size){
     return new Array(size).fill(0);
 }
 
-class MMU {
+export default class MMU {
     #banks;
     #activeBanks;
     #mbc;
@@ -514,5 +514,3 @@ class MMU {
         this.#audio = audio;
     }
 }
-
-export default new MMU();
