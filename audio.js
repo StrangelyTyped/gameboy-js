@@ -1,7 +1,34 @@
 const audioModules = [
     "audio/square-wave-oscillator.js",
     "audio/length-counter.js",
+    "audio/noise-generator.js",
 ];
+
+const noiseFreqTable = [
+    8,
+    16,
+    32,
+    48,
+    64,
+    80,
+    96,
+    112
+];
+
+function applyVolumeEnvelope(volumeEnvelope, gainNode, audioContext){
+    if(volumeEnvelope.step){
+        gainNode.gain.cancelScheduledValues(audioContext.currentTime);
+        let volume = volumeEnvelope.initial;
+        let i = 0;
+        while(volume >= 0 && volume <= 0xF){
+            gainNode.gain.setValueAtTime(volume / 0x0F, audioContext.currentTime + ((i * volumeEnvelope.step) / 64));
+            i++;
+            volume += (volumeEnvelope.direction ? 1 : -1);
+        }
+    }else{
+        gainNode.gain.value = (volumeEnvelope.initial / 0x0F);
+    }
+}
 
 class ToneSweepAudioChannel {
     #registerBase;
@@ -25,7 +52,7 @@ class ToneSweepAudioChannel {
         };
         this.#registerBase = registerBase;
         this.#registerData = {
-            sweep: {
+            frequencySweep: {
                 time: 0,
                 direction: 0,
                 step: 0
@@ -119,32 +146,22 @@ class ToneSweepAudioChannel {
         }
     }
     #applyFrequencySweep(frequencySweep){
-       /* if(frequencySweep.step){
-            this.#gainNode.gain.cancelScheduledValues(this.#audioContext.currentTime);
-            let volume = volumeEnvelope.initial;
+        if(frequencySweep.step && frequencySweep.time){
+            frequencySweep.initial = this.#registerData.frequency;
+            this.#oscillatorParameters.frequency.cancelScheduledValues(this.#audioContext.currentTime);
+            let frequency = frequencySweep.initial;
             let i = 0;
-            while(volume >= 0 && volume <= 0xF){
-                this.#gainNode.gain.setValueAtTime(volume / 0x0F, this.#audioContext.currentTime + ((i * volumeEnvelope.step) / 64));
+            const direction = (frequencySweep.direction ? 1 : -1);
+            /*while(frequency >= 1 && frequency <= 2047){
+                this.#oscillatorParameters.frequency.setValueAtTime(frequency, this.#audioContext.currentTime + ((i * frequencySweep.time) / 128));
                 i++;
-                volume += (volumeEnvelope.direction ? 1 : -1);
+                frequency = frequency + (direction * (frequency/Math.pow(2, frequencySweep.step)));
             }
-        }else{
-            this.#gainNode.gain.value = (volumeEnvelope.initial / 0x0F);
-        }*/
+            this.#oscillatorParameters.frequency.setValueAtTime(0, this.#audioContext.currentTime + ((i * frequencySweep.time) / 128));*/
+        }
     }
     #applyVolumeEnvelope(volumeEnvelope){
-        if(volumeEnvelope.step){
-            this.#gainNode.gain.cancelScheduledValues(this.#audioContext.currentTime);
-            let volume = volumeEnvelope.initial;
-            let i = 0;
-            while(volume >= 0 && volume <= 0xF){
-                this.#gainNode.gain.setValueAtTime(volume / 0x0F, this.#audioContext.currentTime + ((i * volumeEnvelope.step) / 64));
-                i++;
-                volume += (volumeEnvelope.direction ? 1 : -1);
-            }
-        }else{
-            this.#gainNode.gain.value = (volumeEnvelope.initial / 0x0F);
-        }
+        applyVolumeEnvelope(volumeEnvelope, this.#gainNode, this.#audioContext);
     }
 }
 
@@ -177,14 +194,101 @@ class WaveAudioChannel {
 }
 
 class NoiseAudioChannel {
+    #registerData;
+    #audioContext;
+    #noiseGenerator;
+    #lengthLimiter;
+    #gainNode;
+    constructor(audioContext){
+        this.#audioContext = audioContext;
+        this.#noiseGenerator = new AudioWorkletNode(audioContext, "noise-generator");
+        this.#lengthLimiter = new AudioWorkletNode(audioContext, "length-counter");
+        this.#noiseGenerator.connect(this.#lengthLimiter);
+        this.#gainNode = new GainNode(audioContext);
+        this.#lengthLimiter.connect(this.#gainNode);
+
+        this.#registerData = {
+            soundLength: 0,
+            volumeEnvelope: {
+                initial: 0,
+                direction: 0,
+                step: 0
+            },
+            volumeEnvelopeRegister: 0,
+
+            frequency: 0,
+            stepMode: 0,
+            frequencyRegister: 0,
+            counterEnabled: 0,
+        };
+    }
     readRegister(addr){
+        switch(addr){
+            case 0xFF20:
+                return this.#registerData.soundLength;
+            case 0xFF21:
+                return this.#registerData.volumeEnvelopeRegister;
+            case 0xFF22:
+                return this.#registerData.frequencyRegister;
+            case 0xFF23:
+                return this.#registerData.counterEnabled << 6;
+        }
         return 0xFF;
     }
     writeRegister(addr, val){
-
+        switch(addr){
+            case 0xFF20:
+            {
+                this.#registerData.soundLength = val & 0x3F;
+                this.#applySoundLength(this.#registerData.soundLength);
+                break;
+            }
+            case 0xFF21:
+            {
+                this.#registerData.volumeEnvelopeRegister = val;
+                const volumeEnvelope = {
+                    initial: (val & 0xF0) >> 4,
+                    direction: (val & 0x8) >> 3,
+                    step: (val & 0x7),
+                };
+                this.#applyVolumeEnvelope(volumeEnvelope);
+                this.#registerData.volumeEnvelope = volumeEnvelope;
+                break;
+            }
+            case 0xFF22:
+            {
+                this.#registerData.frequencyRegister = val;
+                this.#registerData.stepMode = (val & 0x8) >> 3;
+                const s = (val & 0xF0) >> 4;
+                const r = (val & 0x7);
+                this.#registerData.frequency = noiseFreqTable[r] << s;
+                this.#noiseGenerator.parameters.get("frequency").value = this.#registerData.frequency;
+                this.#noiseGenerator.parameters.get("stepMode").value = this.#registerData.stepMode;
+                break;
+            }
+            case 0xFF23:
+                this.#registerData.counterEnabled = (val & 0x40) >> 6;
+                
+                if(val & 0x80){
+                    this.#applyVolumeEnvelope(this.#registerData.volumeEnvelope);
+                    this.#applySoundLength(this.#registerData.soundLength);
+                    //TODO: more
+                }
+                break;
+        }
     }
     getOutputNode(){
-        return null;
+        return this.#gainNode;
+    }
+    #applySoundLength(soundLength){
+        if(this.#registerData.counterEnabled){
+            this.#lengthLimiter.parameters.get("stopAt").value = this.#audioContext.currentTime + ((64 - soundLength) / 256);
+        } else {
+            this.#lengthLimiter.parameters.get("stopAt").value = 0;
+        }
+    }
+    #applyVolumeEnvelope(volumeEnvelope){
+        applyVolumeEnvelope(volumeEnvelope, this.#gainNode, this.#audioContext);
     }
 }
 
@@ -222,7 +326,7 @@ export default class AudioController {
             new ToneSweepAudioChannel(0xFF10, this.#audioContext),
             new ToneSweepAudioChannel(0xFF15, this.#audioContext),
             new WaveAudioChannel(),
-            new NoiseAudioChannel()
+            new NoiseAudioChannel(this.#audioContext)
         ];
 
         // We need to achieve stereo output from these mono sources
