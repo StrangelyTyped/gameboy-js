@@ -781,7 +781,7 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.andPtr8WithAccum: // AND n
+        case primaryGroupNames.andPtrWithAccum: // AND n
         {
             const prev = registers.A;
             const result = prev & mmu.read(registers.HL);
