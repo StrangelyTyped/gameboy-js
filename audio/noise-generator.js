@@ -8,12 +8,11 @@ class NoiseGenerator extends AudioWorkletProcessor {
 
         // can we step the shift register every n cycles or do we need to step the shift register n times every cycle?
         // if we need to support both, how do we keep track
-        const stepCycles = Math.round(sampleRate / frequency);
+        const stepCycles = Math.floor(sampleRate / frequency);
 
-        const startingState = this.#state;
         let state;
         output.forEach(channel => {
-            state = startingState;
+            state = this.#state;
             for (let i = 0; i < channel.length; i++) {
                 if((currentFrame + i) % stepCycles === 0){
                     // advance

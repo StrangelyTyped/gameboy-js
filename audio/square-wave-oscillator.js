@@ -20,7 +20,6 @@ class SquareWaveOscillator extends AudioWorkletProcessor {
                 // a number from 0...cycleLength
                 const cyclePos = (currentFrame + i) % cycleLength;
 
-                
                 channel[i] = ((cyclePos / cycleLength) < dutyCycle) ? -1 : 1;
             }
         });

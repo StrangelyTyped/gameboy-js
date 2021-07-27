@@ -2,6 +2,7 @@ const audioModules = [
     "audio/square-wave-oscillator.js",
     "audio/length-counter.js",
     "audio/noise-generator.js",
+    "audio/wave-generator.js",
 ];
 
 const noiseFreqTable = [
@@ -73,6 +74,7 @@ class ToneSweepAudioChannel {
         };
     }
     getOutputNode(){
+        return null;
         return this.#gainNode;
     }
     readRegister(addr){
@@ -167,29 +169,90 @@ class ToneSweepAudioChannel {
 
 class WaveAudioChannel {
     #registerData;
-    constructor(){
+    #audioContext;
+    #wave;
+    #lengthLimiter;
+    #gainNode;
+    constructor(audioContext){
         this.#registerData = {
             channelOn: false,
             soundLength: 0,
             outputLevel: 0,
             frequency: 0,
             counterEnabled: 0,
-        }
+        };
+
+        this.#audioContext = audioContext;
+        this.#wave = new AudioWorkletNode(audioContext, "wave-generator");
+        this.#lengthLimiter = new AudioWorkletNode(audioContext, "length-counter");
+        this.#wave.connect(this.#lengthLimiter);
+        this.#gainNode = new GainNode(audioContext);
+        this.#lengthLimiter.connect(this.#gainNode);
 
     }
     readRegister(addr){
-        return 0xFF
+        switch(addr){
+            case 0xFF1A:
+                return this.#registerData.channelOn ? 0x80 : 0x00;
+            case 0xFF1B:
+                return this.#registerData.soundLength;
+            case 0xFF1C:
+                return this.#registerData.volumeMode << 5;
+            case 0xFF1D:
+                return this.#registerData.frequency & 0xFF;
+            case 0xFF1E:
+                return this.#registerData.counterEnabled ? 0x40 : 0x00;
+        }
+        return 0xFF;
     }
     writeRegister(addr, val){
+        switch(addr){
+            case 0xFF1A:
+                this.#registerData.channelOn = (val & 0x80) > 0;
+                this.#wave.parameters.get("enabled").value = (this.#registerData.channelOn ? 1 : 0);
+                break;
+            case 0xFF1B:
+            {
+                this.#registerData.soundLength = val & 0xFF;
+                this.#applySoundLength(this.#registerData.soundLength);
+                break;
+            }
+            case 0xFF1C:
+            {
+                this.#registerData.volumeMode = (val & 0x60) >> 5;
+                this.#wave.parameters.get("volumeMode").value = this.#registerData.volumeMode;
+                break;
+            }
+            case 0xFF1D:
+                this.#registerData.frequency = (this.#registerData.frequency & 0x700) | (val & 0xFF);
+                this.#wave.parameters.get("frequency").value = 65536/(2048-this.#registerData.frequency);
+                break;
+            case 0xFF1E:
+                this.#registerData.counterEnabled = (val & 0x40) >> 6;
+                this.#registerData.frequency = (this.#registerData.frequency & 0xFF) | ((val & 0x7) << 8);
+                this.#wave.parameters.get("frequency").value = 65536/(2048-this.#registerData.frequency);
+                
+                if(val & 0x80){
+                    this.#applySoundLength(this.#registerData.soundLength);
+                }
+                break;
+        }
     }
     readWaveRam(addr){
-        return 0;
+        return this.#wave.parameters.get("wave"+(addr - 0xFF30)).value;
     }
     writeWaveRam(addr, val){
-
+        this.#wave.parameters.get("wave"+(addr - 0xFF30)).value = val;
     }
     getOutputNode(){
-        return null;
+        return this.#gainNode;
+    }
+    #applySoundLength(soundLength){
+        if(this.#registerData.counterEnabled){
+            this.#lengthLimiter.parameters.get("stopAt").value = this.#audioContext.currentTime + ((256 - soundLength) / 256);
+        } else {
+            this.#lengthLimiter.parameters.get("stopAt").value = 0;
+        }
     }
 }
 
@@ -278,6 +341,7 @@ class NoiseAudioChannel {
         }
     }
     getOutputNode(){
+        return null;
         return this.#gainNode;
     }
     #applySoundLength(soundLength){
@@ -325,7 +389,7 @@ export default class AudioController {
         this.#channels = [
             new ToneSweepAudioChannel(0xFF10, this.#audioContext),
             new ToneSweepAudioChannel(0xFF15, this.#audioContext),
-            new WaveAudioChannel(),
+            new WaveAudioChannel(this.#audioContext),
             new NoiseAudioChannel(this.#audioContext)
         ];
 
