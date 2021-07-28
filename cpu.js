@@ -457,7 +457,7 @@ function tick(cpuState){
             const result = ((prev << 1) & 0xFF) | (carry ? 1 : 0);
             registers.A = result;
             registers.flagC = carry;
-            registers.flagZ = (result === 0);
+            registers.flagZ = false;
             registers.flagN = false;
             registers.flagH = false; // known good
             break;
@@ -549,7 +549,7 @@ function tick(cpuState){
             const result = (prev >> 1) | (carry ? 0x80 : 0x00);
             registers.A = result;
             registers.flagC = carry;
-            registers.flagZ = (result === 0);
+            registers.flagZ = false;
             registers.flagN = false;
             registers.flagH = false; // known good
             break;
@@ -562,7 +562,7 @@ function tick(cpuState){
             const result = ((prev << 1) & 0xFF) | (registers.flagC ? 1 : 0);
             registers.A = result;
             registers.flagC = carry;
-            registers.flagZ = (result === 0);
+            registers.flagZ = false;
             registers.flagN = false;
             registers.flagH = false; // known good
             break;
@@ -580,7 +580,7 @@ function tick(cpuState){
             const result = (prev >> 1) | (registers.flagC ? 0x80 : 0x00);
             registers.A = result;
             registers.flagC = carry;
-            registers.flagZ = (result === 0);
+            registers.flagZ = false;
             registers.flagN = false;
             registers.flagH = false; // known good
             break;
@@ -623,7 +623,7 @@ function tick(cpuState){
                 result = result + (registers.flagN ? -0x60 : 0x60);
             }
             if((result & 0xF) > 9 || (result & 0xF0) > 0x90){
-                console.warn("Bad DAA", registers.A, result & 0xFF, previousOp);
+                console.warn("Bad DAA", registers.A, result & 0xFF);
             }
             registers.A = result & 0xFF;
             registers.flagZ = (result & 0xFF) === 0;
@@ -702,22 +702,24 @@ function tick(cpuState){
         case primaryGroupNames.addCarryRegister8ToAccum: // ADC A,n
         {
             const prev = registers.A;
-            const result = prev + registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0);
+            const add = registers[getStandardRegisterLow3(opcode)];
+            const result = prev + add + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) + (add & 0xF) + (registers.flagC ? 1 : 0) > 0xF;
             registers.flagC = (result > 0xFF);
             break;
         }
         case primaryGroupNames.addCarryPtrToAccum: // ADC A, n
         {
             const prev = registers.A;
-            const result = prev + mmu.read(registers.HL) + (registers.flagC ? 1 : 0);
+            const add = mmu.read(registers.HL);
+            const result = prev + add + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) + (add & 0xF) + (registers.flagC ? 1 : 0) > 0xF;
             registers.flagC = (result > 0xFF);
             break;
         }
@@ -748,24 +750,26 @@ function tick(cpuState){
         case primaryGroupNames.subCarryRegister8FromAccum: // SBC A,n
         {
             const prev = registers.A;
-            const diff = prev - (registers[getStandardRegisterLow3(opcode)] + (registers.flagC ? 1 : 0));
+            const sub = registers[getStandardRegisterLow3(opcode)];
+            const diff = prev - (sub + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) < (result & 0xF);
+            registers.flagH = (prev & 0xF) - ((sub & 0xF) + (registers.flagC ? 1 : 0)) < 0;
             registers.flagC = (diff < 0);
             break;
         }
         case primaryGroupNames.subCarryPtrFromAccum: // SBC A,n
         {
             const prev = registers.A;
-            const diff = prev - (mmu.read(registers.HL) + (registers.flagC ? 1 : 0));
+            const sub = mmu.read(registers.HL);
+            const diff = prev - (sub + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) < (result & 0xF)
+            registers.flagH = (prev & 0xF) - ((sub & 0xF) + (registers.flagC ? 1 : 0)) < 0;
             registers.flagC = (diff < 0);
             break;
         }
@@ -897,7 +901,7 @@ function tick(cpuState){
                     registers.HL = data;
                     break;
                 case 0xF1:
-                    registers.AF = data;
+                    registers.AF = data & 0xFFF0;
                     break;
             }
             registers.SP += 2;
@@ -1058,12 +1062,14 @@ function tick(cpuState){
         case primaryGroupNames.addCarryImmediate8ToAccum: // ADC A,n
         {
             const prev = registers.A;
-            const result = prev + mmu.read(registers.PC++) + (registers.flagC ? 1 : 0);
+            const add = mmu.read(registers.PC++);
+            const result = prev + add + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
-            registers.flagC = (result > 0xFF);
             registers.flagN = false;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) + (add & 0xF) + (registers.flagC ? 1 : 0) > 0xF;
+            registers.flagC = (result > 0xFF);
+
             break;
         }
         case primaryGroupNames.subImmediate8FromAccum: // SUB n
@@ -1081,12 +1087,13 @@ function tick(cpuState){
         case primaryGroupNames.subCarryImmediate8FromAccum: // SBC A,n
         {
             const prev = registers.A;
-            const diff = prev - (mmu.read(registers.PC++) + (registers.flagC ? 1 : 0));
+            const sub = mmu.read(registers.PC++);
+            const diff = prev - (sub + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
             registers.flagN = true;
-            registers.flagH = (prev & 0xF) < (result & 0xF);
+            registers.flagH = (prev & 0xF) - ((sub & 0xF) + (registers.flagC ? 1 : 0)) < 0;
             registers.flagC = (diff < 0);
             break;
         }
@@ -1110,13 +1117,14 @@ function tick(cpuState){
         case primaryGroupNames.addImmediate8ToStackPtr:
         {
             const prev = registers.SP;
-            const immediate = uint8ToInt8(mmu.read(registers.PC++));
+            const arg = mmu.read(registers.PC++);
+            const immediate = uint8ToInt8(arg);
             const result = prev + immediate;
             registers.SP = (result < 0 ? result + 0x10000 : result & 0xFFFF);
             registers.flagZ = false;
             registers.flagN = false;
-            registers.flagC = (result < 0) || (result > 0xFFFF);
-            registers.flagH = (immediate < 0 ? (prev & 0xF) < (result & 0xF) : (prev & 0xF) > (result & 0xF)); // guessing?
+            registers.flagC = (prev & 0xFF) + (arg & 0xFF) > 0xFF;
+            registers.flagH = (prev & 0xF) + (arg & 0xF) > 0xF;
             break;
         }
         case primaryGroupNames.jumpPtr:
@@ -1163,13 +1171,14 @@ function tick(cpuState){
         case primaryGroupNames.addImmediate8ToStackPtrToRegister16: // LDHL SP,n
         {
             const prev = registers.SP;
-            const sum = prev + uint8ToInt8(mmu.read(registers.PC++));
+            const arg = mmu.read(registers.PC++);
+            const sum = prev + uint8ToInt8(arg);
             const result = sum < 0 ? sum + 0x10000 : sum & 0xFFFF;
             registers.HL = result;
             registers.flagZ = false;
-            registers.flagC = (sum > 0xFFFF || sum < 0);
+            registers.flagC = (prev & 0xFF) + (arg & 0xFF )> 0xFF;
             registers.flagN = false;
-            registers.flagH = (prev & 0xF) > (result & 0xF);
+            registers.flagH = (prev & 0xF) + (arg & 0xF) > 0xF;
             break;
         }
         case primaryGroupNames.loadRegister16ToStackPtr:
@@ -1229,23 +1238,35 @@ class CPU {
                 mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x1);
             }
             //stat interrupt
-            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+            if(gpuInterruptEnabled){
+                if(mmu.read(0xFFFF) & 0x2){
+                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                }
+                this.#cpuState.awaitingInterrupt = false;
             }
         });
         gpu.onHblank((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+            if(gpuInterruptEnabled){
+                if(mmu.read(0xFFFF) & 0x2){
+                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                }  
+                this.#cpuState.awaitingInterrupt = false;
             }
         });
         gpu.onLyc((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+            if(gpuInterruptEnabled){
+                if(mmu.read(0xFFFF) & 0x2){
+                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                }
+                this.#cpuState.awaitingInterrupt = false;
             }
         });
         gpu.onOam((gpuInterruptEnabled) =>{
-            if(gpuInterruptEnabled && mmu.read(0xFFFF) & 0x2){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+            if(gpuInterruptEnabled){
+                if(mmu.read(0xFFFF) & 0x2){
+                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                }
+                this.#cpuState.awaitingInterrupt = false;
             }
         });
     }
@@ -1254,6 +1275,7 @@ class CPU {
             if(buttonInterruptEnabled && mmu.read(0xFFFF) & 0x10){
                 mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x10);
             }
+            this.#cpuState.awaitingInterrupt = false;
         });
     }
     registerTimerCallbacks(timer){
@@ -1261,6 +1283,7 @@ class CPU {
             if(mmu.read(0xFFFF) & 0x4){
                 mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x4);
             }
+            this.#cpuState.awaitingInterrupt = false;
         });
     }
     registerSerialCallbacks(serial){
@@ -1268,6 +1291,7 @@ class CPU {
             if(mmu.read(0xFFFF) & 0x8){
                 mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x8);
             }
+            this.#cpuState.awaitingInterrupt = false;
         });
     }
 }
