@@ -42,8 +42,11 @@ class ToneSweepAudioChannel {
     constructor(registerBase, audioContext){
         this.#audioContext = audioContext;
         this.#oscillator = new AudioWorkletNode(audioContext, "square-wave-oscillator");
+        const volumeBias = new GainNode(audioContext);
+        volumeBias.gain.value = -0.5;
+        this.#oscillator.connect(volumeBias);
         this.#lengthLimiter = new AudioWorkletNode(audioContext, "length-counter");
-        this.#oscillator.connect(this.#lengthLimiter);
+        volumeBias.connect(this.#lengthLimiter);
         this.#gainNode = new GainNode(audioContext);
         this.#lengthLimiter.connect(this.#gainNode);
 
@@ -74,7 +77,7 @@ class ToneSweepAudioChannel {
         };
     }
     getOutputNode(){
-        return null;
+        //return null;
         return this.#gainNode;
     }
     readRegister(addr){
@@ -171,6 +174,7 @@ class WaveAudioChannel {
     #registerData;
     #audioContext;
     #wave;
+    #waveRam;
     #lengthLimiter;
     #gainNode;
     constructor(audioContext){
@@ -181,14 +185,17 @@ class WaveAudioChannel {
             frequency: 0,
             counterEnabled: 0,
         };
+        this.#waveRam = new Array(16).fill(0);
 
         this.#audioContext = audioContext;
         this.#wave = new AudioWorkletNode(audioContext, "wave-generator");
+        const volumeBias = new GainNode(audioContext);
+        volumeBias.gain.value = -0.5;
+        this.#wave.connect(volumeBias);
         this.#lengthLimiter = new AudioWorkletNode(audioContext, "length-counter");
-        this.#wave.connect(this.#lengthLimiter);
+        volumeBias.connect(this.#lengthLimiter);
         this.#gainNode = new GainNode(audioContext);
         this.#lengthLimiter.connect(this.#gainNode);
-
     }
     readRegister(addr){
         switch(addr){
@@ -220,7 +227,7 @@ class WaveAudioChannel {
             case 0xFF1C:
             {
                 this.#registerData.volumeMode = (val & 0x60) >> 5;
-                this.#wave.parameters.get("volumeMode").value = this.#registerData.volumeMode;
+                this.#updateWaveTable();
                 break;
             }
             case 0xFF1D:
@@ -234,15 +241,25 @@ class WaveAudioChannel {
                 
                 if(val & 0x80){
                     this.#applySoundLength(this.#registerData.soundLength);
+                    this.#wave.parameters.get("resetAt").value = this.#audioContext.currentTime;
                 }
                 break;
         }
     }
+    #updateWaveTable(){
+        for(let i = 0, j = 0; i < 16; i++, j+=2){
+            const sample1 = processWaveSample((this.#waveRam[i] & 0xF0) >> 4, this.#registerData.volumeMode);
+            const sample2 = processWaveSample(this.#waveRam[i] & 0xF, this.#registerData.volumeMode);
+            this.#wave.parameters.get("wave"+j).value = sample1;
+            this.#wave.parameters.get("wave"+(j+1)).value = sample2;
+        }
+    }
     readWaveRam(addr){
-        return this.#wave.parameters.get("wave"+(addr - 0xFF30)).value;
+        return this.#waveRam[addr - 0xFF30];
     }
     writeWaveRam(addr, val){
-        this.#wave.parameters.get("wave"+(addr - 0xFF30)).value = val;
+        this.#waveRam[addr - 0xFF30] = val;
+        this.#updateWaveTable();
     }
     getOutputNode(){
         return this.#gainNode;
@@ -256,6 +273,14 @@ class WaveAudioChannel {
     }
 }
 
+
+function processWaveSample(sample, volumeMode){
+    sample = sample >> (volumeMode - 1);
+    sample = (sample / 7.5) - 1;
+    //sample *= 0.5;
+    return sample;
+}
+
 class NoiseAudioChannel {
     #registerData;
     #audioContext;
@@ -265,8 +290,11 @@ class NoiseAudioChannel {
     constructor(audioContext){
         this.#audioContext = audioContext;
         this.#noiseGenerator = new AudioWorkletNode(audioContext, "noise-generator");
+        const volumeBias = new GainNode(audioContext);
+        volumeBias.gain.value = -0.5;
+        this.#noiseGenerator.connect(volumeBias);
         this.#lengthLimiter = new AudioWorkletNode(audioContext, "length-counter");
-        this.#noiseGenerator.connect(this.#lengthLimiter);
+        volumeBias.connect(this.#lengthLimiter);
         this.#gainNode = new GainNode(audioContext);
         this.#lengthLimiter.connect(this.#gainNode);
 

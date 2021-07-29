@@ -24,7 +24,7 @@ class NoiseGenerator extends AudioWorkletProcessor {
                         state = (state & 0xFFBF) | (newBit << 5);
                     }
                 }
-                channel[i] = state & 0x1 ? -1 : 1;
+                channel[i] = state & 0x1 ? -0.5 : 0.5;
             }
         });
         this.#state = state;

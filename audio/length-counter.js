@@ -6,7 +6,7 @@ class LengthCounter extends AudioWorkletProcessor {
         const stopAt = parameters.stopAt[0];
 
         output.forEach((channel, idx) => {
-            if(stopAt === 0 || stopAt > currentTime){
+            if(idx < input.length && (stopAt === 0 || stopAt > currentTime)){
                 channel.set(input[idx], 0);
             }
         });
