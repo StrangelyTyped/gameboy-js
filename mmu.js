@@ -26,10 +26,20 @@ class RamPersistence{
         this.#cartridgeName = cartridgeName;
         this.#bankCount = ramBankCount;
     }
+    readDataFromStore(cart){
+        return window.localStorage.getItem(cart);
+    }
+    writeDataToStore(cart, data){
+        window.localStorage.setItem(cart, data);
+    }
     loadRamBanks(){
         let banks = [];
         try {
-            banks = JSON.parse(window.localStorage.getItem(this.#cartridgeName)) || [];
+            banks = (JSON.parse(this.readDataFromStore(this.#cartridgeName)) || []).map(bank => {
+                const newBank = makeBuffer(0x2000);
+                newBank.set(bank, 0);
+                return newBank;
+            });
         } catch (e){}
         while(banks.length < this.#bankCount){
             banks.push(makeBuffer(0x2000));
@@ -37,7 +47,7 @@ class RamPersistence{
         return banks;
     }
     saveRamBanks(banks){
-        window.localStorage.setItem(this.#cartridgeName, JSON.stringify(banks));
+        this.writeDataToStore(this.#cartridgeName, JSON.stringify(banks.map(bank => Array.from(bank))));
     }
 }
 
@@ -166,7 +176,7 @@ class MBC3 {
 }
 
 function makeBuffer(size){
-    return new Array(size).fill(0);
+    return new Uint8Array(size).fill(0);
 }
 
 export default class MMU {
@@ -480,14 +490,12 @@ export default class MMU {
     }
     
     mapRomBank(index, data){
-        if(data.length != 0x4000){
-            const pad = new Array(0x4000 - data.length);
-            data = data.concat(pad);
-        }
+        const bank = makeBuffer(0x4000);
+        bank.set(data, 0);
         if(index === 0){
             this.setCartridgeType(data[0x147], data[0x148], data[0x149], readString(data, 0x0134, 11));
         }
-        this.#banks.rom[index] = data;
+        this.#banks.rom[index] = bank;
     }
     mapBootRom(data){
         this.#banks.bootRom = data;

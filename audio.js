@@ -262,6 +262,7 @@ class WaveAudioChannel {
         this.#updateWaveTable();
     }
     getOutputNode(){
+        //return null;
         return this.#gainNode;
     }
     #applySoundLength(soundLength){
@@ -352,7 +353,8 @@ class NoiseAudioChannel {
                 this.#registerData.stepMode = (val & 0x8) >> 3;
                 const s = (val & 0xF0) >> 4;
                 const r = (val & 0x7);
-                this.#registerData.frequency = noiseFreqTable[r] << s;
+                this.#registerData.frequency = 4194304 / (noiseFreqTable[r] << s);
+                
                 this.#noiseGenerator.parameters.get("frequency").value = this.#registerData.frequency;
                 this.#noiseGenerator.parameters.get("stepMode").value = this.#registerData.stepMode;
                 break;
@@ -369,7 +371,7 @@ class NoiseAudioChannel {
         }
     }
     getOutputNode(){
-        return null;
+        //return null;
         return this.#gainNode;
     }
     #applySoundLength(soundLength){
