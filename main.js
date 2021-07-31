@@ -1,5 +1,3 @@
-import bios from "./roms/gb_bios.js";
-import rom from './roms/pokered.js';
 
 import JoypadKeyboard from "./joypad-keyboard.js";
 import Timer from "./timer.js";
@@ -10,12 +8,14 @@ import GraphicsPipeline from "./graphics.js";
 
 import cpu from "./cpu.js";
 
-import { FpsCounter } from "./utils.js"
+import { FpsCounter, loadBlob } from "./utils.js"
 
 async function initialize(){
     const mmu = new MMU();
     cpu.setMmu(mmu);
+    const bios = await loadBlob("roms/gb_bios.bin");
     mmu.mapBootRom(bios);
+    const rom = await loadBlob("roms/Super Mario Land (JUE) (V1.1) [!].gb");
     mmu.loadCartridge(rom);
     window.addEventListener("beforeunload", () => mmu.saveRam());
 
@@ -40,6 +40,7 @@ async function initialize(){
     document.getElementById("volume").addEventListener("input", (e) =>{
         audio.setVolume(e.target.value);
     });
+    audio.setVolume(document.getElementById("volume").value);
 
     const frameTime = document.getElementById("frametime");
     const fps = document.getElementById("fpsCounter");

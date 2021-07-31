@@ -16,3 +16,9 @@ export class FpsCounter {
 export function uint8ToInt8(val){
     return val > 127 ? val - 256 : val;
 }
+
+export async function loadBlob(path){
+    const response = await fetch(path);
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+}
