@@ -76,6 +76,8 @@ export default class GraphicsPipeline {
             obj1PaletteMap: buildPaletteMap(0),
             interruptFlags: 0,
             mode: MODE_SEARCH_OAM,
+            windowRenderY: -1, // internal
+            windowActive: false, // internal
         };
         this.#scanlineParams = {
             scrollX: 0,
@@ -208,7 +210,8 @@ export default class GraphicsPipeline {
     }
     #findSpritesForY(y){
         const spritesForRow = [];
-        const spriteHeight = (this.#registerData.control & 0x4 ? 16 : 8);
+        const spriteHeight = (this.#registerData.control & 0x4) ? 16 : 8;
+        const tileMask = (this.#registerData.control & 0x4) ? 0xFE : 0xFF;
     
         for(let i = 0; i < 0xA0; i+=4){
             const spriteY = this.#mmu.read(0xFE00 + i) - 16;
@@ -216,7 +219,7 @@ export default class GraphicsPipeline {
                 spritesForRow.push({
                     x: this.#mmu.read(0xFE00 + i + 1) - 8,
                     y: spriteY,
-                    tileId: this.#mmu.read(0xFE00 + i + 2),
+                    tileId: this.#mmu.read(0xFE00 + i + 2) & tileMask,
                     flags: this.#mmu.read(0xFE00 + i + 3),
                 });
                 if(spritesForRow.length === 10){
@@ -259,17 +262,20 @@ export default class GraphicsPipeline {
     }
     #fillWinLayer(){
         // window -1 for 'no window here'
-        const y = this.#registerData.y;
-        const windowY = this.#scanlineParams.windowY;
+        
         const buffer = this.#layerBuffers.win;
 
-        if(y < windowY){
+        const windowX = this.#scanlineParams.windowX - 7;
+
+        if(!this.#registerData.windowActive || windowX > 166){ // not sure why 166 but roll with it
             buffer.fill(-1);
             return;
         }
 
-        const windowX = this.#scanlineParams.windowX - 7;
+        this.#registerData.windowRenderY++;
+        const windowRenderY = this.#registerData.windowRenderY;
 
+        
         const tileDataAddressingMode = (this.#registerData.control & 0x10) ? 1 : 0;
         const tileData = tileDataAddressingMode ? 0x8000 : 0x9000;
         const tileMap = (this.#registerData.control & 0x40) ? 0x9C00 : 0x9800;
@@ -280,12 +286,12 @@ export default class GraphicsPipeline {
             if(x < 0){
                 continue;
             }
-            let tileId = this.#mmu.read(tileMap + (32 * Math.floor((y - windowY)/8)) + Math.floor((x - windowX)/8));
+            let tileId = this.#mmu.read(tileMap + (32 * Math.floor(windowRenderY/8)) + Math.floor((x - windowX)/8));
             if(!tileDataAddressingMode){
                 tileId = uint8ToInt8(tileId);
             }
             const tileBase = tileData + (tileId * 16);
-            this.#readTile(buffer, x, tileBase + (((y - windowY) % 8) * 2));
+            this.#readTile(buffer, x, tileBase + ((windowRenderY % 8) * 2));
         }
     }
     #fillSpriteLayer(){
@@ -339,6 +345,13 @@ export default class GraphicsPipeline {
         if(bgEnabled){
             this.#fillBgLayer();
         }
+
+        // Window housekeeping, happens regardless of enable flag apparently
+        if(!this.#registerData.windowActive && this.#registerData.y === this.#scanlineParams.windowY){
+            this.#registerData.windowActive = true;
+            this.#registerData.windowRenderY = -1;
+        }
+
         if(windowEnabled){
             this.#fillWinLayer();
         }
@@ -357,9 +370,9 @@ export default class GraphicsPipeline {
             const spriteFlags = this.#layerBuffers.objFlags[x];
             let pixel = 0;
             if(spritesEnabled && spritePix){
-                if(spriteFlags & 0x80 && winPix > 0){
+                if(spriteFlags & 0x80 && windowEnabled && winPix > 0){
                     pixel = bgPalette[winPix];
-                } else if(spriteFlags & 0x80 && bgPix != 0){
+                } else if(spriteFlags & 0x80 && bgEnabled && bgPix != 0){
                     pixel = bgPalette[bgPix];
                 } else {
                     pixel = spritePalette[(spriteFlags & 0x10) >> 4][spritePix];
@@ -490,6 +503,7 @@ export default class GraphicsPipeline {
                         this.#incrementY();
                         if(this.#registerData.y >= screenScanH){
                             this.#registerData.y = 0;
+                            this.#registerData.windowActive = false;
                             this.#setMode(MODE_SEARCH_OAM);
                             this.#debugDrawBgMap();
                         }
