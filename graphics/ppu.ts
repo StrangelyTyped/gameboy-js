@@ -3,11 +3,18 @@ import {Clocked, MemoryMappable, uint8ToInt8, makeBuffer} from "../utils.js";
 import MMU from "../memory/mmu.js";
 
 const colours = [
-    0xFF,
-    0xC0,
-    0x80,
-    0x00
+    0xFFFFFF,
+    0xC0C0C0,
+    0x808080,
+    0x000000
 ];
+
+const altColours = [
+    0xFFCCCC,
+    0xC09999,
+    0x803e3e,
+    0x450000,
+]
 
 const screenScanW = 170;
 const screenScanH = 154;
@@ -70,6 +77,11 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
         win: makeBuffer(screenW).fill(0),
         obj: makeBuffer(screenW).fill(0),
         objFlags: makeBuffer(screenW).fill(0),
+    };
+    #debug = {
+        highlightBg: false,
+        highlightWin: false,
+        highlightSprite: false,
     };
 
     constructor(mmu : MMU, renderer : Renderer){
@@ -226,14 +238,14 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
         }
     }
     #fillWinLayer(){
-        // window -1 for 'no window here'
+        // window 0xFF for 'no window here'
         
         const buffer = this.#layerBuffers.win;
 
         const windowX = this.#scanlineParams.windowX - 7;
 
         if(!this.#registerData.windowActive || windowX > 166){ // not sure why 166 but roll with it
-            buffer.fill(-1);
+            buffer.fill(0xFF);
             return;
         }
 
@@ -327,6 +339,10 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
         const bgPalette = this.#registerData.bgPaletteMap;
         const spritePalette = [this.#registerData.obj0PaletteMap, this.#registerData.obj1PaletteMap];
 
+        const bgColours = (this.#debug.highlightBg ? altColours : colours);
+        const winColours = (this.#debug.highlightWin ? altColours : colours);
+        const spriteColours = (this.#debug.highlightSprite ? altColours : colours);
+
         for(let x = 0; x < screenW; x++){
             const bgPix = this.#layerBuffers.bg[x];
             const winPix = this.#layerBuffers.win[x];
@@ -334,33 +350,30 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             const spriteFlags = this.#layerBuffers.objFlags[x];
             let pixel = 0;
             if(spritesEnabled && spritePix){
-                if(spriteFlags & 0x80 && windowEnabled && winPix > 0){
-                    pixel = bgPalette[winPix];
-                } else if(spriteFlags & 0x80 && bgEnabled && bgPix != 0){
-                    pixel = bgPalette[bgPix];
+                if(spriteFlags & 0x80 && windowEnabled && winPix !== 0 && winPix !== 0xFF){
+                    pixel = winColours[bgPalette[winPix]];
+                } else if(spriteFlags & 0x80 && bgEnabled && bgPix !== 0){
+                    pixel = colours[bgPalette[bgPix]];
                 } else {
-                    pixel = spritePalette[(spriteFlags & 0x10) >> 4][spritePix];
+                    pixel = spriteColours[spritePalette[(spriteFlags & 0x10) >> 4][spritePix]];
                 }
-            } else if(windowEnabled && winPix !== -1){
-                pixel = bgPalette[winPix];
+            } else if(windowEnabled && winPix !== 0xFF){
+                pixel = winColours[bgPalette[winPix]];
             } else if(bgEnabled) {
-                pixel = bgPalette[bgPix];
+                pixel = bgColours[bgPalette[bgPix]];
             }
-            this.#renderer.setPixel(x, colours[pixel]);
+            this.#renderer.setPixel(x, pixel);
         }
         this.#renderer.renderToLine(y);
 
     }
 
-    #debugDrawBgMap(){
-        /*if(!this.#debugCanvas){
-            return;
-        }
-        const bgTileDataAddressingMode = (this.#registerData.control & 0x10) ? 1 : 0;
+    debugRenderVram(renderer : Renderer, tileMapBankId : number, tileDataBankId : number){
+        const bgTileDataAddressingMode = tileDataBankId === -1 ? ((this.#registerData.control & 0x10) ? 1 : 0) : tileDataBankId;
         const bgTileData = bgTileDataAddressingMode ? 0x8000 : 0x9000;
-        const bgTileMap = (this.#registerData.control & 0x08) ? 0x9C00 : 0x9800;
-        const buffer = this.#debugData.data;
+        const bgTileMap = tileMapBankId === -1 ? ((this.#registerData.control & 0x08) ? 0x9C00 : 0x9800) : tileMapBankId;
         for(let y = 0; y < 256; y++){
+            const inViewportY = ((256 + y - this.#registerData.scrollY) % 256) >= 0 && ((256 + y - this.#registerData.scrollY) % 256) < screenH;
             for(let x = 0; x < 256; x+=8){
                 let bgTileId = this.#mmu.read(bgTileMap + (32 * Math.floor(y/8)) + Math.floor(x/8));
                 if(!bgTileDataAddressingMode){
@@ -372,16 +385,16 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
                 const b0 = this.#mmu.read(basePtr);
                 const b1 = this.#mmu.read(basePtr + 1);
                 for(let i = 0; i < 8; i++){
+                    const inViewport = inViewportY && ((256 + x + i - this.#registerData.scrollX) % 256) >= 0 && ((256 + x + i - this.#registerData.scrollX) % 256) < screenW;
+
                     const p0 = (b0 & (1 << (7 - i))) ? 1 : 0;
                     const p1 = (b1 & (1 << (7 - i))) ? 2 : 0;
-                    const colour = colours[this.#registerData.bgPaletteMap[p0 | p1]];
-                    buffer[((y * 256) + x + i) * 4] = colour;
-                    buffer[((y * 256) + x + i) * 4 + 1] = colour;
-                    buffer[((y * 256) + x + i) * 4 + 2] = colour;
+                    const colour = (inViewport ? altColours : colours)[this.#registerData.bgPaletteMap[p0 | p1]];
+                    renderer.setPixel(x + i, colour);
                 }
             }
+            renderer.renderToLine(y);
         }
-        this.#debugCanvas.putImageData(this.#debugData, 0, 0);*/
     }
 
     #setMode(mode : PPUMode){
@@ -420,6 +433,18 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             const lycInterruptEnabled = (this.#registerData.interruptFlags & 0x40) > 0;
             this.#callbacks.lyc.forEach(cb => cb(lycInterruptEnabled));
         }
+    }
+
+    debugSetHighlightBg(enable : boolean){
+        this.#debug.highlightBg = enable;
+    }
+
+    debugSetHighlightWin(enable : boolean){
+        this.#debug.highlightWin = enable;
+    }
+
+    debugSetHighlightSprite(enable : boolean){
+        this.#debug.highlightSprite = enable;
     }
 
     tick(cycles : number){
@@ -469,7 +494,6 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
                             this.#registerData.y = 0;
                             this.#registerData.windowActive = false;
                             this.#setMode(PPUMode.MODE_SEARCH_OAM);
-                            this.#debugDrawBgMap();
                         }
                     } else {
                         running = false;

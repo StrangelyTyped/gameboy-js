@@ -8,9 +8,11 @@ import LocalStorageRamPersistence from "./memory/persistence/localstorage-persis
 import PixelProcessingUnit from "./graphics/ppu.js";
 import CanvasRenderer from "./graphics/canvas-renderer.js";
 
+
 import CPU from "./cpu/cpu.js";
 
 import { FpsCounter, loadBlob } from "./utils.js"
+import VRamDebugDisplay from "./graphics/vram-debug-display.js";
 
 async function initialize(){
     const mmu = new MMU(LocalStorageRamPersistence);
@@ -56,9 +58,17 @@ async function initialize(){
         gpuFps.update();
         fps.innerText = browserFps.getCount() + "/" + gpuFps.getCount();
         waitingForVsync = false;
-    })
+    });
 
+    new VRamDebugDisplay(mmu, ppu);
+
+    let paused = false;
+    let initialised = false;
     function run(elapsed : number){
+        requestAnimationFrame(run);
+        if(paused){
+            return;
+        }
         const tickStart = performance.now();
         waitingForVsync = true;
         // If we run for more than 32ms of emulated CPU cycles then something's gone wrong, back off
@@ -71,7 +81,7 @@ async function initialize(){
             audio.tick(simulatedCycles);
             targetCycles -= simulatedCycles;
         }
-        requestAnimationFrame(run);
+
         const rtElapsed = performance.now() - tickStart;
         frameTime.innerText = Math.round(rtElapsed).toString();
         browserFps.update();
@@ -79,12 +89,16 @@ async function initialize(){
     }
     const beginButton = <HTMLElement>document.getElementById("begin");
     beginButton.addEventListener("click", async () => {
-        
+        if(!initialised){
+            initialised = true;
         await audio.initialize();
         mmu.mapAudio(audio);
 
         requestAnimationFrame(run);
-        beginButton.style.display = "none";
+        } else {
+            paused = !paused;
+        }
+        beginButton.innerText = paused ? "Resume" : "Pause";
     })
     
 }

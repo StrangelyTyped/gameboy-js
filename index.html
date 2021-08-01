@@ -1,122 +1,120 @@
 <!doctype html>
 <html>
 <head>
-    <style> 
-.controls-container {
-    width: 250px;
-    height: 250px;
-  display: flex;
-  flex-direction:column;
-  background-color:  #BFBEBA;
-  border-radius: 10%;
-  margin-left: 5%;
-}
-
-.main-controls {
-  margin-top: 5%;
-  flex:1;
-  display:flex;
-}
-
-.d-pad {
-  flex:1;
-  display: flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-}
-
-.d-pad-left-right {
-    display: flex;
-}
-
-.up {
-  height: 20px;
-  width: 20px;
-  background: #555;
-}
-.left-right {
-  height: 20px;
-  width: 30px;
-  background: #555;
-}
-.down {
-  height: 20px;
-  width: 20px;
-  background: #555;
-}
-
-.a-b {
-  flex:1;
-  display:flex;
-  justify-content: flex-end;
-  align-items: center;
-  padding-right: 5%;
-}
-
-.a-button, .b-button {
-  background: #900446;
-  height: 30px;
-  width: 30px;
-  border-radius: 100%;
-  margin: 5%;
-}
-
-.a-button {
-  transform: translatey(-10px);
-}
-
-.sub-controls{
-  flex:1;
-  display: flex;
-  justify-content: center;
-}
-
-.select, .start {
-  width: 40px;
-  height: 10px;
-  background: #545761;
-  margin: 5% 0% 0% 0%;
-  border-radius: 10%;
-  transform: rotate(-42deg);
-}
+    <title>StrangelyTyped/gameboy-js</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link href="https://unpkg.com/winbox@0.2.0/dist/css/winbox.min.css" rel="stylesheet" />
+    <style>
+        html, body {
+            height: 100%;
+        }
     </style>
 </head>
 <body>
-    <div style="width: 400px; display: flex; justify-content: space-between">
-        <div>Frame Time: <span id="frametime">?</span>ms</div>
-        <div style="text-align: right">FPS: <span id="fpsCounter">?</span></div>
-    </div>
-    <div style="display: flex">
-        <canvas style="border: 1px solid black; width: 400px; height: 360px;" width="160" height="144" id="screen"></canvas>
-        <!--<canvas style="border: 1px solid red;width:512px;height:512px;" width="256" height="256" id="bgmap"></canvas>-->
-        <!--<div class="controls-container" style="display: none">
-            <div class="main-controls">
-                <div class="d-pad">
-                    <button id="joypad-up" class="up" title="Up"></button>
-                    <div class="d-pad-left-right">
-                        <button id="joypad-left" class="left-right" title="Left"></button>
-                        <button id="joypad-right" class="left-right" title="Right"></button>
-                    </div>
-                    <button id="joypad-down" class="down" title="Down"></button>
-                </div>
-                <div class="a-b">
-                    <button id="joypad-b" class="b-button" title="B"></button>
-                    <button id="joypad-a" class="a-button" title="A"></button>
-                </div>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="https://github.com/StrangelyTyped/gameboy-js">StrangelyTyped/gameboy-js</a>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="begin">Start</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Debug
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="#" id="debug-show-vram-viewer">VRAM viewer</a></li>
+                        </ul>
+                    </li>
+                </ul>
             </div>
-            <div class="sub-controls">
-                <button id="joypad-select" class="select" title="Select"></button>
-                <button id="joypad-start" class="start" title="Start"></button>
-            </div>
-        </div>-->
+        </div>
+    </nav>
+    <div class="container-fluid">
+        <div style="width: 400px; display: flex; justify-content: space-between">
+            <div>Frame Time: <span id="frametime">?</span>ms</div>
+            <div style="text-align: right">FPS: <span id="fpsCounter">?</span></div>
+        </div>
+        <div style="display: flex">
+            <canvas style="border: 1px solid black; width: 400px; height: 360px;" width="160" height="144" id="screen"></canvas>
+        </div>
+        <div>
+        <input type="range" id="volume" name="volume" value="0.1" min="0" max="1" step="0.1" />
+        <label for="volume">Volume</label>
+        </div>
     </div>
-    <div>
-      <input type="range" id="volume" name="volume" value="0.1" min="0" max="1" step="0.1" />
-      <label for="volume">Volume</label>
+
+    <div style="display: none" id="window-templates">
+        <div id="debug-vram-viewer-content" class="container-fluid mx-auto">
+            <table class="table table-sm">
+                <tr>
+                    <th scope="row">ScrollX:</th>
+                    <td id="debug-vram-scrollx">0</td>
+                    <th scope="row">ScrollY:</th>
+                    <td id="debug-vram-scrolly">0</td>
+                </tr>
+                <tr>
+                    <th scope="row">BG Map:</th>
+                    <td id="debug-vram-bgtilemap">?</td>
+                    <th scope="row">Win Map:</th>
+                    <td id="debug-vram-wintilemap">?</td>
+                </tr>
+                <tr>
+                    <th scope="row">Tile Data:</th>
+                    <td id="debug-vram-tiledata">?</td>
+                </tr>
+            </table>
+            <canvas style="border: 1px solid black;" width="256" height="256" id="vram-canvas"></canvas>
+            <fieldset class="pt-1">
+                <legend class="h6">Render With BG Tile Map Bank</legend>
+                <div class="form-check form-check-inline">
+                    <input type="radio" class="form-check-input" name="vram-map" id="vram-map-active" value="-1" autocomplete="off" checked>
+                    <label class="form-check-label" for="vram-map-active">Active</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input type="radio" class="form-check-input" name="vram-map" id="vram-map-0" value="0" autocomplete="off">
+                    <label class="form-check-label" for="vram-map-0">9800</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input type="radio" class="form-check-input" name="vram-map" id="vram-map-1" value="1" autocomplete="off">
+                    <label class="form-check-label" for="vram-map-1">9C00</label>
+                </div>
+            </fieldset>
+            <fieldset class="pt-1">
+                <legend class="h6">Render With BG Tile Data Bank</legend>
+                <div class="form-check form-check-inline">
+                    <input type="radio" class="form-check-input" name="vram-bank" id="vram-bank-active" value="-1" autocomplete="off" checked>
+                    <label class="form-check-label" for="vram-bank-active">Active</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input type="radio" class="form-check-input" name="vram-bank" id="vram-bank-0" value="0" autocomplete="off">
+                    <label class="form-check-label" for="vram-bank-0">8800</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input type="radio" class="form-check-input" name="vram-bank" id="vram-bank-1" value="1" autocomplete="off">
+                    <label class="form-check-label" for="vram-bank-1">8000</label>
+                </div>
+            </fieldset>
+            <fieldset class="pt-1">
+                <legend class="h6">Main Display Rendering</legend>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="vram-highlight-bg">
+                    <label class="form-check-label" for="vram-highlight-bg">Highlight BG Pixels</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="vram-highlight-win">
+                    <label class="form-check-label" for="vram-highlight-win">Highlight Window Pixels</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="vram-highlight-sprite">
+                    <label class="form-check-label" for="vram-highlight-sprite">Highlight Sprite Pixels</label>
+                </div>
+            </fieldset>
+        </div>
     </div>
-    <button id="begin">Start Emulator</button>
     
     <script type="module" src="main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script>
 </body>
 </html>

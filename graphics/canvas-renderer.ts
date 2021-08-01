@@ -9,7 +9,9 @@ export default class CanvasRenderer implements Renderer {
         this.#imageData.data.fill(0xFF);;
     }
     setPixel(x: number, colour: number): void {
-        this.#imageData.data.fill(colour, x * 4, (x * 4) + 3);
+        this.#imageData.data[x * 4] = (colour >> 16) & 0xFF;
+        this.#imageData.data[x * 4 + 1] = (colour >> 8) & 0xFF;
+        this.#imageData.data[x * 4 + 2] = colour & 0xFF;
     }
     renderToLine(y: number): void {
         this.#canvas.putImageData(this.#imageData, 0, y);
