@@ -1,19 +1,6 @@
-import {uint8ToInt8} from "./utils.js";
-
-const registerNames = {
-    0xFF40: "LCD Control",
-    0xFF41: "LCD Status",
-    0xFF42: "Scroll Y",
-    0xFF43: "Scroll X",
-    0xFF44: "LCD Y",
-    0xFF45: "LCD Y Compare",
-    0xFF46: "OAM DMA",
-    0xFF47: "BG Palettte Data",
-    0xFF48: "Object Palette 0 Data",
-    0xFF49: "Object Palette 1 Data",
-    0xFF4A: "Window Y",
-    0xFF4B: "Window X",
-};
+import { GraphicsCallback, Renderer } from "./graphics.js";
+import {Clocked, MemoryMappable, uint8ToInt8, makeBuffer} from "../utils.js";
+import MMU from "../memory/mmu.js";
 
 const colours = [
     0xFF,
@@ -27,14 +14,14 @@ const screenScanH = 154;
 const screenW = 160;
 const screenH = 144;
 
-const MODE_SEARCH_OAM = 2;
-const MODE_DRAW_LINE = 3;
-const MODE_HBLANK = 0;
-const MODE_VBLANK = 1;
+enum PPUMode {
+    MODE_SEARCH_OAM = 2,
+    MODE_DRAW_LINE = 3,
+    MODE_HBLANK = 0,
+    MODE_VBLANK = 1,
+}
 
-let logRegisters = false;
-
-function buildPaletteMap(palette){
+function buildPaletteMap(palette : number){
     return [
         palette & 0x3,
         (palette >> 2) & 0x3,
@@ -43,87 +30,68 @@ function buildPaletteMap(palette){
     ];
 }
 
-export default class GraphicsPipeline {
-    #canvas;
-    #imageData;
-    #mmu;
-    #registerData;
-    #tickCounter = 0;
-    #scanlineParams;
-    #callbacks = {
-        lyc: [],
-        hblank: [],
-        vblank: [],
-        oam: [],
+export default class PixelProcessingUnit implements MemoryMappable, Clocked {
+    #renderer;
+    #mmu : MMU;
+    #registerData = {
+        control: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        windowX: 0,
+        windowY: 0,
+        yCompare: 0,
+        bgPalette: 0,
+        bgPaletteMap: buildPaletteMap(0),
+        obj0Palette: 0,
+        obj0PaletteMap: buildPaletteMap(0),
+        obj1Palette: 0,
+        obj1PaletteMap: buildPaletteMap(0),
+        interruptFlags: 0,
+        mode: PPUMode.MODE_SEARCH_OAM,
+        windowRenderY: -1, // internal
+        windowActive: false, // internal
     };
-    #layerBuffers;
-    #debugCanvas;
-    #debugData;
-    constructor(canvasElem){
-        this.#registerData = {
-            control: 0,
-            y: 0,
-            scrollX: 0,
-            scrollY: 0,
-            windowX: 0,
-            windowY: 0,
-            yCompare: 0,
-            bgPalette: 0,
-            bgPaletteMap: buildPaletteMap(0),
-            obj0Palette: 0,
-            obj0PaletteMap: buildPaletteMap(0),
-            obj1Palette: 0,
-            obj1PaletteMap: buildPaletteMap(0),
-            interruptFlags: 0,
-            mode: MODE_SEARCH_OAM,
-            windowRenderY: -1, // internal
-            windowActive: false, // internal
-        };
-        this.#scanlineParams = {
-            scrollX: 0,
-            scrollY: 0,
-            windowX: 0,
-            windowY: 0,
-        };
-        this.#layerBuffers = {
-            bg: new Array(screenW).fill(0),
-            win: new Array(screenW).fill(0),
-            obj: new Array(screenW).fill(0),
-            objFlags: new Array(screenW).fill(0),
-        }
+    #tickCounter = 0;
+    #scanlineParams = {
+        scrollX: 0,
+        scrollY: 0,
+        windowX: 0,
+        windowY: 0,
+    };
+    #callbacks = {
+        lyc: <GraphicsCallback[]>[],
+        hblank: <GraphicsCallback[]>[],
+        vblank: <GraphicsCallback[]>[],
+        oam: <GraphicsCallback[]>[],
+    };
+    #layerBuffers = {
+        bg: makeBuffer(screenW).fill(0),
+        win: makeBuffer(screenW).fill(0),
+        obj: makeBuffer(screenW).fill(0),
+        objFlags: makeBuffer(screenW).fill(0),
+    };
 
-        this.#canvas = canvasElem.getContext('2d');
-        this.#imageData = this.#canvas.createImageData(screenW, 1);
-        this.#imageData.data.fill(0xFF);
-
-        const debugCanvas = document.getElementById("bgmap");
-        if(debugCanvas){
-            this.#debugCanvas = debugCanvas.getContext("2d");
-            this.#debugData = this.#debugCanvas.getImageData(0, 0, 256, 256);
-            this.#debugData.data.fill(0xff);
-        }
+    constructor(mmu : MMU, renderer : Renderer){
+        this.#renderer = renderer;
+        this.#mmu = mmu;
     }
-    onLyc(callback){
+
+    onLyc(callback : GraphicsCallback){
         this.#callbacks.lyc.push(callback);
     }
-    onOam(callback){
+    onOam(callback : GraphicsCallback){
         this.#callbacks.oam.push(callback);
     }
-    onVblank(callback){
+    onVblank(callback : GraphicsCallback){
         this.#callbacks.vblank.push(callback);
     }
-    onHblank(callback){
+    onHblank(callback : GraphicsCallback){
         this.#callbacks.hblank.push(callback);
     }
     
-    mapMemory(mmu){
-        this.#mmu = mmu;
-    }
-    readRegister(register){
-        if(logRegisters){
-            console.warn("GPU read register", registerNames[register])
-        }
-        switch(register){
+    readRegister(addr : number){
+        switch(addr){
             case 0xFF40:
                 return this.#registerData.control;
             case 0xFF41:
@@ -150,65 +118,62 @@ export default class GraphicsPipeline {
             case 0xFF4B:
                 return this.#registerData.windowX;
             default:
-                console.warn("Unhandled GPU register read", registerNames[register]);
+                console.warn("Unhandled GPU register read", addr);
         }
         return 0;
     }
-    writeRegister(register, v){
-        if(logRegisters){
-            console.warn("GPU Write register", registerNames[register], v)
-        }
-        switch(register){
+    writeRegister(addr : number, val : number){
+        switch(addr){
             case 0xFF40:
-                this.#registerData.control = v;
+                this.#registerData.control = val;
                 break;
             case 0xFF41:
-                this.#registerData.interruptFlags = v;
+                this.#registerData.interruptFlags = val;
                 break;
             case 0xFF42:
-                this.#registerData.scrollY = v;
+                this.#registerData.scrollY = val;
                 break;
             case 0xFF43:
-                this.#registerData.scrollX = v;
+                this.#registerData.scrollX = val;
                 break;
             // 0xFF44: y
             case 0xFF45:
-                this.#registerData.yCompare = v;
+                this.#registerData.yCompare = val;
                 break;
             case 0xFF46:
             {
                 // OAM DMA transfer
                 // v is the source address high byte
                 // This is supposed to take 160 cycles but we'll see
-                const sourceBase = (v << 8);
+                const sourceBase = (val << 8);
                 for(let i = 0; i < 0xA0; i++){
                     this.#mmu.write(0xFE00 + i, this.#mmu.read(sourceBase + i));
                 }
                 break;
             }
             case 0xFF47:
-                this.#registerData.bgPalette = v;
-                this.#registerData.bgPaletteMap = buildPaletteMap(v);
+                this.#registerData.bgPalette = val;
+                this.#registerData.bgPaletteMap = buildPaletteMap(val);
                 break;
             case 0xFF48:
-                this.#registerData.obj0Palette = v;
-                this.#registerData.obj0PaletteMap = buildPaletteMap(v);
+                this.#registerData.obj0Palette = val;
+                this.#registerData.obj0PaletteMap = buildPaletteMap(val);
                 break;
             case 0xFF49:
-                this.#registerData.obj1Palette = v;
-                this.#registerData.obj1PaletteMap = buildPaletteMap(v);
+                this.#registerData.obj1Palette = val;
+                this.#registerData.obj1PaletteMap = buildPaletteMap(val);
                 break;
             case 0xFF4A:
-                this.#registerData.windowY = v;
+                this.#registerData.windowY = val;
                 break;
             case 0xFF4B:
-                this.#registerData.windowX = v;
+                this.#registerData.windowX = val;
                 break;
             default:
-                console.warn("Unhandled GPU register write", registerNames[register], v);
+                console.warn("Unhandled GPU register write", addr, val);
         }
     }
-    #findSpritesForY(y){
+    #findSpritesForY(y : number){
         const spritesForRow = [];
         const spriteHeight = (this.#registerData.control & 0x4) ? 16 : 8;
         const tileMask = (this.#registerData.control & 0x4) ? 0xFE : 0xFF;
@@ -230,7 +195,7 @@ export default class GraphicsPipeline {
         spritesForRow.sort((a, b) => a.x - b.x);
         return spritesForRow;
     }
-    #readTile(buffer, bufferX, basePtr){
+    #readTile(buffer : Uint8Array, bufferX: number, basePtr: number){
         const b0 = this.#mmu.read(basePtr);
         const b1 = this.#mmu.read(basePtr + 1);
         for(let i = Math.max(0, -bufferX); i < 8 && (bufferX + i) < buffer.length; i++){
@@ -362,7 +327,6 @@ export default class GraphicsPipeline {
         const bgPalette = this.#registerData.bgPaletteMap;
         const spritePalette = [this.#registerData.obj0PaletteMap, this.#registerData.obj1PaletteMap];
 
-        const imageData = this.#imageData;
         for(let x = 0; x < screenW; x++){
             const bgPix = this.#layerBuffers.bg[x];
             const winPix = this.#layerBuffers.win[x];
@@ -382,14 +346,14 @@ export default class GraphicsPipeline {
             } else if(bgEnabled) {
                 pixel = bgPalette[bgPix];
             }
-            imageData.data.fill(colours[pixel], x * 4, (x * 4) + 3);
+            this.#renderer.setPixel(x, colours[pixel]);
         }
-        
-        this.#canvas.putImageData(imageData, 0, y);
+        this.#renderer.renderToLine(y);
+
     }
 
     #debugDrawBgMap(){
-        if(!this.#debugCanvas){
+        /*if(!this.#debugCanvas){
             return;
         }
         const bgTileDataAddressingMode = (this.#registerData.control & 0x10) ? 1 : 0;
@@ -417,31 +381,31 @@ export default class GraphicsPipeline {
                 }
             }
         }
-        this.#debugCanvas.putImageData(this.#debugData, 0, 0);
+        this.#debugCanvas.putImageData(this.#debugData, 0, 0);*/
     }
 
-    #setMode(mode){
+    #setMode(mode : PPUMode){
         this.#registerData.mode = mode;
         switch(mode){
-            case MODE_SEARCH_OAM:
+            case PPUMode.MODE_SEARCH_OAM:
             {
                 const oamInterruptEnabled = (this.#registerData.interruptFlags & 0x20) > 0
                 this.#callbacks.oam.forEach(cb => cb(oamInterruptEnabled));
                 break;
             }
-            case MODE_DRAW_LINE:
+            case PPUMode.MODE_DRAW_LINE:
                 this.#scanlineParams.scrollX = this.#registerData.scrollX;
                 this.#scanlineParams.scrollY = this.#registerData.scrollY;
                 this.#scanlineParams.windowX = this.#registerData.windowX;
                 this.#scanlineParams.windowY = this.#registerData.windowY;
                 break;
-            case MODE_HBLANK:
+            case PPUMode.MODE_HBLANK:
             {
                 const hblankInterruptEnabled = (this.#registerData.interruptFlags & 0x8) > 0;
                 this.#callbacks.hblank.forEach(cb => cb(hblankInterruptEnabled));
                 break;
             }
-            case MODE_VBLANK:
+            case PPUMode.MODE_VBLANK:
             {
                 const vblankInterruptEnabled = (this.#registerData.interruptFlags & 0x10) > 0;
                 this.#callbacks.vblank.forEach(cb => cb(vblankInterruptEnabled));
@@ -458,7 +422,7 @@ export default class GraphicsPipeline {
         }
     }
 
-    tick(cycles){
+    tick(cycles : number){
         if(!(this.#registerData.control & 0x80)){
             // LCD disabled
             return;
@@ -467,44 +431,44 @@ export default class GraphicsPipeline {
         let running = true;
         while(running){
             switch(this.#registerData.mode){
-                case MODE_SEARCH_OAM:
+                case PPUMode.MODE_SEARCH_OAM:
                     if(this.#tickCounter > 80){
                         this.#tickCounter -= 80;
-                        this.#setMode(MODE_DRAW_LINE);
+                        this.#setMode(PPUMode.MODE_DRAW_LINE);
                     }else{
                         running = false;
                     }
                     break;
-                case MODE_DRAW_LINE:
+                case PPUMode.MODE_DRAW_LINE:
                     if(this.#tickCounter > 180){
                         this.#tickCounter -= 180;
-                        this.#setMode(MODE_HBLANK);
+                        this.#setMode(PPUMode.MODE_HBLANK);
                         this.#draw();
                     } else {
                         running = false;
                     }
                     break;
-                case MODE_HBLANK:
+                case PPUMode.MODE_HBLANK:
                     if(this.#tickCounter > 196){
                         this.#tickCounter -= 196;
                         this.#incrementY();
                         if(this.#registerData.y >= screenH){
-                            this.#setMode(MODE_VBLANK);
+                            this.#setMode(PPUMode.MODE_VBLANK);
                         } else {
-                            this.#setMode(MODE_SEARCH_OAM);
+                            this.#setMode(PPUMode.MODE_SEARCH_OAM);
                         }
                     } else {
                         running = false;
                     }
                     break;
-                case MODE_VBLANK:
+                case PPUMode.MODE_VBLANK:
                     if(this.#tickCounter > 456){
                         this.#tickCounter -= 456;
                         this.#incrementY();
                         if(this.#registerData.y >= screenScanH){
                             this.#registerData.y = 0;
                             this.#registerData.windowActive = false;
-                            this.#setMode(MODE_SEARCH_OAM);
+                            this.#setMode(PPUMode.MODE_SEARCH_OAM);
                             this.#debugDrawBgMap();
                         }
                     } else {

@@ -1,27 +1,30 @@
 
-import JoypadKeyboard from "./joypad-keyboard.js";
+import JoypadKeyboard from "./joypad/joypad-keyboard.js";
 import Timer from "./timer.js";
-import Serial from "./serial.js";
-import Audio from "./audio.js";
-import MMU from "./mmu.js";
-import GraphicsPipeline from "./graphics.js";
+import Serial from "./serial/dummy-serial.js";
+import AudioController from "./audio/audio-controller.js";
+import MMU from "./memory/mmu.js";
+import LocalStorageRamPersistence from "./memory/persistence/localstorage-persistence.js";
+import PixelProcessingUnit from "./graphics/ppu.js";
+import CanvasRenderer from "./graphics/canvas-renderer.js";
 
-import cpu from "./cpu.js";
+import CPU from "./cpu/cpu.js";
 
 import { FpsCounter, loadBlob } from "./utils.js"
 
 async function initialize(){
-    const mmu = new MMU();
-    cpu.setMmu(mmu);
+    const mmu = new MMU(LocalStorageRamPersistence);
+    const cpu = new CPU(mmu);
     const bios = await loadBlob("roms/gb_bios.bin");
     mmu.mapBootRom(bios);
     const rom = await loadBlob("roms/Super Mario Land (JUE) (V1.1) [!].gb");
     mmu.loadCartridge(rom);
     window.addEventListener("beforeunload", () => mmu.saveRam());
 
-    const gpu = new GraphicsPipeline(document.getElementById("screen"));
-    mmu.mapGpuMemory(gpu);
-    cpu.registerGpuCallbacks(gpu);
+    const renderer = new CanvasRenderer(<HTMLCanvasElement>document.getElementById("screen"));
+    const ppu = new PixelProcessingUnit(mmu, renderer);
+    mmu.mapGraphics(ppu);
+    cpu.registerGpuCallbacks(ppu);
 
     const joypad = new JoypadKeyboard();
     mmu.mapJoypad(joypad);
@@ -35,33 +38,34 @@ async function initialize(){
     mmu.mapSerial(serial);
     cpu.registerSerialCallbacks(serial);
 
-    const audio = new Audio();
+    const audio = new AudioController();
     // initialized / mapped later
-    document.getElementById("volume").addEventListener("input", (e) =>{
-        audio.setVolume(e.target.value);
+    const volumeSlider = <HTMLInputElement>document.getElementById("volume");
+    volumeSlider.addEventListener("input", (e) =>{
+        audio.setVolume(parseFloat(volumeSlider.value));
     });
-    audio.setVolume(document.getElementById("volume").value);
+    audio.setVolume(parseFloat(volumeSlider.value));
 
-    const frameTime = document.getElementById("frametime");
-    const fps = document.getElementById("fpsCounter");
+    const frameTime = <HTMLElement>document.getElementById("frametime");
+    const fps = <HTMLElement>document.getElementById("fpsCounter");
 
     const browserFps = new FpsCounter();
     const gpuFps = new FpsCounter();
     let waitingForVsync = true;
-    gpu.onVblank(() => {
+    ppu.onVblank(() => {
         gpuFps.update();
         fps.innerText = browserFps.getCount() + "/" + gpuFps.getCount();
         waitingForVsync = false;
     })
 
-    function run(elapsed){
+    function run(elapsed : number){
         const tickStart = performance.now();
         waitingForVsync = true;
         // If we run for more than 32ms of emulated CPU cycles then something's gone wrong, back off
         let targetCycles = 4194.304 * Math.min(32, elapsed);
         while(waitingForVsync && targetCycles > 0){
             const simulatedCycles = cpu.tick();
-            gpu.tick(simulatedCycles);
+            ppu.tick(simulatedCycles);
             timer.tick(simulatedCycles);
             serial.tick(simulatedCycles);
             audio.tick(simulatedCycles);
@@ -69,11 +73,11 @@ async function initialize(){
         }
         requestAnimationFrame(run);
         const rtElapsed = performance.now() - tickStart;
-        frameTime.innerText = Math.round(rtElapsed);
+        frameTime.innerText = Math.round(rtElapsed).toString();
         browserFps.update();
         fps.innerText = browserFps.getCount() + "/" + gpuFps.getCount();
     }
-    const beginButton = document.getElementById("begin");
+    const beginButton = <HTMLElement>document.getElementById("begin");
     beginButton.addEventListener("click", async () => {
         
         await audio.initialize();

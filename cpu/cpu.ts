@@ -1,61 +1,62 @@
-import {primaryGroups, primaryGroupNames, extendedGroups, extendedGroupNames} from "./cpu-opcodes.js";
-import registers from "./cpu-registers.js";
-import {uint8ToInt8} from "./utils.js";
-let mmu = null;
+import PixelProcessingUnit from "../graphics/ppu.js";
+import JoypadBase from "../joypad/joypad-base.js";
+import MMU from "../memory/mmu.js";
+import Serial from "../serial/serial.js";
+import Timer from "../timer.js";
+import { uint8ToInt8 } from "../utils.js";
+import {primaryGroups, PrimaryGroupNames, extendedGroups, ExtendedGroupNames} from "./cpu-opcodes.js";
+import Registers, { RegisterNames } from "./cpu-registers.js";
+
 const standardOpcodeRegisterMappingLow3 = [
-    "B",
-    "C",
-    "D",
-    "E",
-    "H",
-    "L",
+    RegisterNames.B,
+    RegisterNames.C,
+    RegisterNames.D,
+    RegisterNames.E,
+    RegisterNames.H,
+    RegisterNames.L,
     null, // HL pointer deref
-    "A"
+    RegisterNames.A
 ];
-function getStandardRegisterLow3(opcode){
-    return standardOpcodeRegisterMappingLow3[opcode & 0x7];
+function getStandardRegisterLow3(opcode : number){
+    return <RegisterNames>standardOpcodeRegisterMappingLow3[opcode & 0x7];
 }
-const standardOpcodeRegisterMappingOther = [
+const standardOpcodeRegisterMappingMid3 = [
     [
-        "B",
-        "D",
-        "H"
+        RegisterNames.B,
+        RegisterNames.D,
+        RegisterNames.H
     ],
     [
-        "C",
-        "E",
-        "L",
-        "A"
+        RegisterNames.C,
+        RegisterNames.E,
+        RegisterNames.L,
+        RegisterNames.A
     ]
 ]
-function getStandardRegisterMid3(opcode){
-    return standardOpcodeRegisterMappingOther[(opcode & 0x8) >> 3][(opcode & 0x30) >> 4];
+function getStandardRegisterMid3(opcode : number){
+    return standardOpcodeRegisterMappingMid3[(opcode & 0x8) >> 3][(opcode & 0x30) >> 4];
 }
 
-let logInstructions = 0;
-
-function extendedTick(){
+function extendedTick(registers : Registers, mmu : MMU){
     const opcode = mmu.read(registers.PC++);
     //console.log("Extended opcode", opcode);
     const opcodeGroup = extendedGroups[opcode];
-    if(logInstructions){
-        console.log("Extended Opcode", opcode, opcodeGroup.name);
-    }
+
     switch(opcodeGroup.groupId){
-        case extendedGroupNames.rotateLeft:
+        case ExtendedGroupNames.rotateLeft:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const carry = (prev & 0x80) !== 0;
             const result = ((prev << 1) & 0xFF) | (carry ? 1 : 0);
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.rotateLeftPtr:
+        case ExtendedGroupNames.rotateLeftPtr:
         {
             const prev = mmu.read(registers.HL);
             const carry = (prev & 0x80) !== 0;
@@ -67,20 +68,20 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.rotateRight:
+        case ExtendedGroupNames.rotateRight:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const carry = (prev & 0x01) !== 0;
             const result = (prev >> 1) | (carry ? 0x80 : 0x00);
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.rotateRightPtr:
+        case ExtendedGroupNames.rotateRightPtr:
         {
             const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
@@ -92,20 +93,20 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.rotateLeftCarry:
+        case ExtendedGroupNames.rotateLeftCarry:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const carry = (prev & 0x80) !== 0;
             const result = ((prev << 1) & 0xFF) | (registers.flagC ? 1 : 0);
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.rotateLeftCarryPtr:
+        case ExtendedGroupNames.rotateLeftCarryPtr:
         {
             const prev = mmu.read(registers.HL);
             const carry = (prev & 0x80) !== 0;
@@ -117,20 +118,20 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.rotateRightCarry:
+        case ExtendedGroupNames.rotateRightCarry:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const carry = (prev & 0x01) !== 0;
             const result = (prev >> 1) | (registers.flagC ? 0x80 : 0x00);
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.rotateRightCarryPtr:
+        case ExtendedGroupNames.rotateRightCarryPtr:
         {
             const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
@@ -142,20 +143,20 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.shiftLeft:
+        case ExtendedGroupNames.shiftLeft:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const carry = (prev & 0x80) !== 0;
             const result = ((prev << 1) & 0xFF);
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.shiftLeftPtr:
+        case ExtendedGroupNames.shiftLeftPtr:
         {
             const prev = mmu.read(registers.HL);
             const carry = (prev & 0x80) !== 0;
@@ -167,21 +168,21 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.shiftRight:
+        case ExtendedGroupNames.shiftRight:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const carry = (prev & 0x01) !== 0;
             const msb = (prev & 0x80);
             const result = ((prev >> 1) & 0xFF) | msb;
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.shiftRightPtr:
+        case ExtendedGroupNames.shiftRightPtr:
         {
             const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
@@ -194,19 +195,19 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.swap:
+        case ExtendedGroupNames.swap:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const result = ((prev & 0xF) << 4) | ((prev & 0xF0) >> 4);
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = false;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.swapPtr:
+        case ExtendedGroupNames.swapPtr:
         {
             const prev = mmu.read(registers.HL);
             const result = ((prev & 0xF) << 4) | ((prev & 0xF0) >> 4);
@@ -217,20 +218,20 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.shiftRightLogical:
+        case ExtendedGroupNames.shiftRightLogical:
         {
             const register = getStandardRegisterLow3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const carry = (prev & 0x01) !== 0;
             const result = (prev >> 1);
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagC = carry;
             registers.flagZ = (result === 0);
             registers.flagN = false;
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.shiftRightLogicalPtr:
+        case ExtendedGroupNames.shiftRightLogicalPtr:
         {
             const prev = mmu.read(registers.HL);
             const carry = (prev & 0x01) !== 0;
@@ -242,16 +243,16 @@ function extendedTick(){
             registers.flagH = false;
             break;
         }
-        case extendedGroupNames.testBit:
+        case ExtendedGroupNames.testBit:
         {
             const bitMask = 1 << ((opcode >> 3) & 0x7);
-            const prev = registers[getStandardRegisterLow3(opcode)]
+            const prev = registers.values[getStandardRegisterLow3(opcode)]
             registers.flagZ = (prev & bitMask) === 0;
             registers.flagN = false;
             registers.flagH = true;
             break;
         }
-        case extendedGroupNames.testBitPtr:
+        case ExtendedGroupNames.testBitPtr:
         {
             const bitMask = 1 << ((opcode >> 3) & 0x7);
             registers.flagZ = (mmu.read(registers.HL) & bitMask) === 0;
@@ -259,13 +260,13 @@ function extendedTick(){
             registers.flagH = true;
             break;
         }
-        case extendedGroupNames.resetBit:
+        case ExtendedGroupNames.resetBit:
         {
             const bitMask = 0xFF ^ (1 << ((opcode >> 3) & 0x7));
-            registers[getStandardRegisterLow3(opcode)] &= bitMask;
+            registers.values[getStandardRegisterLow3(opcode)] &= bitMask;
             break;
         }
-        case extendedGroupNames.resetBitPtr:
+        case ExtendedGroupNames.resetBitPtr:
         {
             const bitMask = 0xFF ^ (1 << ((opcode >> 3) & 0x7));
             const prev = mmu.read(registers.HL);
@@ -273,13 +274,13 @@ function extendedTick(){
             mmu.write(registers.HL, result);
             break;
         }
-        case extendedGroupNames.setBit:
+        case ExtendedGroupNames.setBit:
         {
             const bitMask = (1 << ((opcode >> 3) & 0x7));
-            registers[getStandardRegisterLow3(opcode)] |= bitMask;
+            registers.values[getStandardRegisterLow3(opcode)] |= bitMask;
             break;
         }
-        case extendedGroupNames.setBitPtr:
+        case ExtendedGroupNames.setBitPtr:
         {
             const bitMask = (1 << ((opcode >> 3) & 0x7));
             const prev = mmu.read(registers.HL);
@@ -292,21 +293,17 @@ function extendedTick(){
             throw new Error();
     }
 
-    return opcodeGroup.cycleCount;
+    return opcodeGroup.cycleCount[0];
 }
 
 
-function tick(cpuState){
-    if(logInstructions){
-        console.log("Before", JSON.stringify(registers.values));
-    }
-
+function tick(cpuState : CPUState, registers : Registers, mmu : MMU){
     const interrupts = mmu.read(0xFF0F);
     // service interrupts
     if(cpuState.interruptsEnabled && mmu.read(0xFFFF) && (interrupts & 0x1F)){
         cpuState.awaitingInterrupt = false;
         cpuState.interruptsEnabled = false;
-        let jumpTarget;
+        let jumpTarget = 0;
         if(interrupts & 0x1){
             //vblank
             mmu.write(0xFF0F, interrupts & 0xFE);
@@ -328,10 +325,12 @@ function tick(cpuState){
             mmu.write(0xFF0F, interrupts & 0xEF);
             jumpTarget = 0x60;
         }
-        registers.SP -= 2;
-        mmu.write16(registers.SP, registers.PC);
-        registers.PC = jumpTarget;
-        return 16;
+        if(jumpTarget){
+            registers.SP -= 2;
+            mmu.write16(registers.SP, registers.PC);
+            registers.PC = jumpTarget;
+            return 16;
+        }
     }
 
     if(cpuState.awaitingInterrupt){
@@ -341,18 +340,13 @@ function tick(cpuState){
     const opcode = mmu.read(registers.PC++);
     
     const opcodeGroup = primaryGroups[opcode];
-
-    if(logInstructions){
-        console.log("Opcode", opcodeGroup.name, registers.PC);
-        logInstructions--;
-    }
     // Some opcodes may need to override
-    let cycleIncrement = opcodeGroup.cycleCount;
+    let cycleIncrement = opcodeGroup.cycleCount[0];
     switch(opcodeGroup.groupId){
-        case primaryGroupNames.nop: // NOP
+        case PrimaryGroupNames.nop: // NOP
             // nop
             break;
-        case primaryGroupNames.loadImmediate16ToRegister:
+        case PrimaryGroupNames.loadImmediate16ToRegister:
         {
             const immediate = mmu.read16(registers.PC);
             registers.PC += 2;
@@ -374,7 +368,7 @@ function tick(cpuState){
             }
             break;
         }
-        case primaryGroupNames.loadRegister8ToPtr:
+        case PrimaryGroupNames.loadRegister8ToPtr:
             switch(opcode){
                 case 0x02:
                     mmu.write(registers.BC, registers.A);
@@ -395,13 +389,13 @@ function tick(cpuState){
                 case 0x74:
                 case 0x75:
                 case 0x77:
-                    mmu.write(registers.HL, registers[getStandardRegisterLow3(opcode)]);
+                    mmu.write(registers.HL, registers.values[getStandardRegisterLow3(opcode)]);
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
             }
             break;
-        case primaryGroupNames.incrementRegister16: // INC nn
+        case PrimaryGroupNames.incrementRegister16: // INC nn
         {
             switch(opcode){
                 case 0x03:
@@ -421,36 +415,36 @@ function tick(cpuState){
             }
             break;
         }
-        case primaryGroupNames.incrementRegister8: // INC n
+        case PrimaryGroupNames.incrementRegister8: // INC n
         {
             const register = getStandardRegisterMid3(opcode);
-            const prev = registers[register];
+            const prev = registers.values[register];
             const result = (prev + 1) & 0xFF;
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = (false);
             registers.flagH = ((prev & 0xF) > (result & 0xF));
         
             break;
         }
-        case primaryGroupNames.decrementRegister8: // DEC n
+        case PrimaryGroupNames.decrementRegister8: // DEC n
         {
             const register = getStandardRegisterMid3(opcode);
             
-            const prev = registers[register];
+            const prev = registers.values[register];
             const result = prev > 0 ? (prev - 1) : 0xFF;
-            registers[register] = result;
+            registers.values[register] = result;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = (true);
             registers.flagH = ((prev & 0xF) < (result & 0xF));
             break;
         }
-        case primaryGroupNames.loadImmediate8ToRegister:
+        case PrimaryGroupNames.loadImmediate8ToRegister:
         {
-            registers[getStandardRegisterMid3(opcode)] = mmu.read(registers.PC++);
+            registers.values[getStandardRegisterMid3(opcode)] = mmu.read(registers.PC++);
             break;
         }
-        case primaryGroupNames.rotateLeft: //RLCA
+        case PrimaryGroupNames.rotateLeft: //RLCA
         {
             const prev = registers.A;
             const carry = (prev & 0x80) !== 0;
@@ -462,14 +456,14 @@ function tick(cpuState){
             registers.flagH = false; // known good
             break;
         }
-        case primaryGroupNames.loadRegister16ToImmediateAddr:
+        case PrimaryGroupNames.loadRegister16ToImmediateAddr:
         {    
             const addr = mmu.read16(registers.PC);
             registers.PC += 2;
             mmu.write16(addr, registers.SP);
             break;
         }
-        case primaryGroupNames.addRegister16ToRegister16: // ADD HL,n
+        case PrimaryGroupNames.addRegister16ToRegister16: // ADD HL,n
         {
             let prev;
             switch(opcode){
@@ -487,6 +481,7 @@ function tick(cpuState){
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
+                    prev = 0;
             }
             const result = registers.HL + prev;
             registers.HL = result & 0xFFFF;
@@ -495,7 +490,7 @@ function tick(cpuState){
             registers.flagC = (result > 0xFFFF);
             break;
         }
-        case primaryGroupNames.loadPtrToRegister8:
+        case PrimaryGroupNames.loadPtrToRegister8:
             switch(opcode){
                 case 0x0A:
                     registers.A = mmu.read(registers.BC);
@@ -516,13 +511,13 @@ function tick(cpuState){
                 case 0x66:
                 case 0x6E:
                 case 0x7E:
-                    registers[getStandardRegisterMid3(opcode)] = mmu.read(registers.HL);
+                    registers.values[getStandardRegisterMid3(opcode)] = mmu.read(registers.HL);
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
             }
             break;
-        case primaryGroupNames.decrementRegister16: // DEC nn
+        case PrimaryGroupNames.decrementRegister16: // DEC nn
         {
             switch(opcode){
                 case 0x0B:
@@ -542,7 +537,7 @@ function tick(cpuState){
             }
             break;
         }
-        case primaryGroupNames.rotateRight: // RRCA
+        case PrimaryGroupNames.rotateRight: // RRCA
         {
             const prev = registers.A;
             const carry = (prev & 0x01) !== 0;
@@ -555,7 +550,7 @@ function tick(cpuState){
             break;
         }
         // case stop
-        case primaryGroupNames.rotateLeftCarry: // RLA
+        case PrimaryGroupNames.rotateLeftCarry: // RLA
         {
             const prev = registers.A;
             const carry = (prev & 0x80) !== 0;
@@ -567,13 +562,13 @@ function tick(cpuState){
             registers.flagH = false; // known good
             break;
         }
-        case primaryGroupNames.relativeJumpSignedImmediate8:
+        case PrimaryGroupNames.relativeJumpSignedImmediate8:
         {
             const offset = uint8ToInt8(mmu.read(registers.PC++));
             registers.PC += offset;
             break;
         }
-        case primaryGroupNames.rotateRightCarry: // RRA
+        case PrimaryGroupNames.rotateRightCarry: // RRA
         {
             const prev = registers.A;
             const carry = (prev & 0x01) !== 0;
@@ -585,7 +580,7 @@ function tick(cpuState){
             registers.flagH = false; // known good
             break;
         }
-        case primaryGroupNames.relativeJumpFlagSignedImmediate8:
+        case PrimaryGroupNames.relativeJumpFlagSignedImmediate8:
         {
             const offset = uint8ToInt8(mmu.read(registers.PC++));
             let takeBranch = false;
@@ -607,13 +602,13 @@ function tick(cpuState){
             }
             if(takeBranch){
                 registers.PC += offset;
-                cycleIncrement = cycleIncrement[0];
+                cycleIncrement = opcodeGroup.cycleCount[0];
             }else{
-                cycleIncrement = cycleIncrement[1];
+                cycleIncrement = opcodeGroup.cycleCount[1];
             }
             break;
         }
-        case primaryGroupNames.bcdAdjust: // DAA
+        case PrimaryGroupNames.bcdAdjust: // DAA
         {
             let result = registers.A;
             if(registers.flagH || (result & 0xF) > 0x9){
@@ -631,12 +626,12 @@ function tick(cpuState){
             registers.flagC = result < 0 || result > 0xFF; // "set or reset according to operation" ?
             break;
         }
-        case primaryGroupNames.bitwiseComplementAccum: // CPL
+        case PrimaryGroupNames.bitwiseComplementAccum: // CPL
             registers.A ^= 0xFF;
             registers.flagN = true;
             registers.flagH = true; // known good
             break;
-        case primaryGroupNames.incrementPtr: // INC n
+        case PrimaryGroupNames.incrementPtr: // INC n
         {
             const prev = mmu.read(registers.HL);
             const result = prev + 1;
@@ -646,7 +641,7 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.decrementPtr: // DEC n
+        case PrimaryGroupNames.decrementPtr: // DEC n
         {
             const prev = mmu.read(registers.HL);
             const result = prev > 0 ? prev - 1 : 0xFF;
@@ -656,31 +651,31 @@ function tick(cpuState){
             registers.flagN = true;
             break;
         }
-        case primaryGroupNames.loadImmediate8ToPtr:
+        case PrimaryGroupNames.loadImmediate8ToPtr:
             mmu.write(registers.HL, mmu.read(registers.PC++));
             break;
-        case primaryGroupNames.setCarryFlag: // SCF
+        case PrimaryGroupNames.setCarryFlag: // SCF
             registers.flagN = false;
             registers.flagH = false;
             registers.flagC = true;
             break;
-        case primaryGroupNames.complementCarryFlag: // CCF
+        case PrimaryGroupNames.complementCarryFlag: // CCF
             registers.flagN = false;
             registers.flagH = false;
             registers.flagC = !registers.flagC;
             break;
-        case primaryGroupNames.loadRegister8ToRegister8:
-            registers[getStandardRegisterMid3(opcode)] = registers[getStandardRegisterLow3(opcode)];
+        case PrimaryGroupNames.loadRegister8ToRegister8:
+            registers.values[getStandardRegisterMid3(opcode)] = registers.values[getStandardRegisterLow3(opcode)];
             break;
-        case primaryGroupNames.halt:
+        case PrimaryGroupNames.halt:
         {
             cpuState.awaitingInterrupt = true;
             break;
         }
-        case primaryGroupNames.addRegister8ToAccum:
+        case PrimaryGroupNames.addRegister8ToAccum:
         {
             const prev = registers.A;
-            const result = prev + registers[getStandardRegisterLow3(opcode)];
+            const result = prev + registers.values[getStandardRegisterLow3(opcode)];
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
             registers.flagN = false;
@@ -688,7 +683,7 @@ function tick(cpuState){
             registers.flagC = (result > 0xFF);
             break;
         }
-        case primaryGroupNames.addPtrToAccum:
+        case PrimaryGroupNames.addPtrToAccum:
         {
             const prev = registers.A;
             const result = prev + mmu.read(registers.HL);
@@ -699,10 +694,10 @@ function tick(cpuState){
             registers.flagC = (result > 0xFF);
             break;
         }
-        case primaryGroupNames.addCarryRegister8ToAccum: // ADC A,n
+        case PrimaryGroupNames.addCarryRegister8ToAccum: // ADC A,n
         {
             const prev = registers.A;
-            const add = registers[getStandardRegisterLow3(opcode)];
+            const add = registers.values[getStandardRegisterLow3(opcode)];
             const result = prev + add + (registers.flagC ? 1 : 0);
             registers.A = result & 0xFF;
             registers.flagZ = ((result & 0xFF) === 0);
@@ -711,7 +706,7 @@ function tick(cpuState){
             registers.flagC = (result > 0xFF);
             break;
         }
-        case primaryGroupNames.addCarryPtrToAccum: // ADC A, n
+        case PrimaryGroupNames.addCarryPtrToAccum: // ADC A, n
         {
             const prev = registers.A;
             const add = mmu.read(registers.HL);
@@ -723,10 +718,10 @@ function tick(cpuState){
             registers.flagC = (result > 0xFF);
             break;
         }
-        case primaryGroupNames.subRegister8FromAccum: // SUB n
+        case PrimaryGroupNames.subRegister8FromAccum: // SUB n
         {
             const prev = registers.A;
-            const diff = prev - registers[getStandardRegisterLow3(opcode)];
+            const diff = prev - registers.values[getStandardRegisterLow3(opcode)];
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
             registers.flagZ = (result === 0);
@@ -735,7 +730,7 @@ function tick(cpuState){
             registers.flagC = (diff < 0);
             break;
         }
-        case primaryGroupNames.subPtrFromAccum: // SUB n
+        case PrimaryGroupNames.subPtrFromAccum: // SUB n
         {
             const prev = registers.A;
             const diff = prev - mmu.read(registers.HL);
@@ -747,10 +742,10 @@ function tick(cpuState){
             registers.flagC = (diff < 0);
             break;
         }
-        case primaryGroupNames.subCarryRegister8FromAccum: // SBC A,n
+        case PrimaryGroupNames.subCarryRegister8FromAccum: // SBC A,n
         {
             const prev = registers.A;
-            const sub = registers[getStandardRegisterLow3(opcode)];
+            const sub = registers.values[getStandardRegisterLow3(opcode)];
             const diff = prev - (sub + (registers.flagC ? 1 : 0));
             const result = (diff < 0 ? diff + 0x100 : diff);
             registers.A = result;
@@ -760,7 +755,7 @@ function tick(cpuState){
             registers.flagC = (diff < 0);
             break;
         }
-        case primaryGroupNames.subCarryPtrFromAccum: // SBC A,n
+        case PrimaryGroupNames.subCarryPtrFromAccum: // SBC A,n
         {
             const prev = registers.A;
             const sub = mmu.read(registers.HL);
@@ -773,10 +768,10 @@ function tick(cpuState){
             registers.flagC = (diff < 0);
             break;
         }
-        case primaryGroupNames.andRegister8WithAccum: // AND n
+        case PrimaryGroupNames.andRegister8WithAccum: // AND n
         {
             const prev = registers.A;
-            const result = prev & registers[getStandardRegisterLow3(opcode)];
+            const result = prev & registers.values[getStandardRegisterLow3(opcode)];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -784,7 +779,7 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.andPtrWithAccum: // AND n
+        case PrimaryGroupNames.andPtrWithAccum: // AND n
         {
             const prev = registers.A;
             const result = prev & mmu.read(registers.HL);
@@ -795,10 +790,10 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.xorRegister8WithAccum: // XOR n
+        case PrimaryGroupNames.xorRegister8WithAccum: // XOR n
         {
             const prev = registers.A;
-            const result = prev ^ registers[getStandardRegisterLow3(opcode)];
+            const result = prev ^ registers.values[getStandardRegisterLow3(opcode)];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -806,7 +801,7 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.xorPtrWithAccum: // XOR n
+        case PrimaryGroupNames.xorPtrWithAccum: // XOR n
         {
             const prev = registers.A;
             const result = prev ^ mmu.read(registers.HL);
@@ -817,10 +812,10 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.orRegister8WithAccum: // OR n
+        case PrimaryGroupNames.orRegister8WithAccum: // OR n
         {
             const prev = registers.A;
-            const result = prev | registers[getStandardRegisterLow3(opcode)];
+            const result = prev | registers.values[getStandardRegisterLow3(opcode)];
             registers.A = result;
             registers.flagZ = result === 0;
             registers.flagC = false;
@@ -828,7 +823,7 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.orPtrWithAccum: // OR n
+        case PrimaryGroupNames.orPtrWithAccum: // OR n
         {
             const prev = registers.A;
             const result = prev | mmu.read(registers.HL);
@@ -839,17 +834,17 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.compareRegister8WithAccum: // CP n
+        case PrimaryGroupNames.compareRegister8WithAccum: // CP n
         {
             const prev = registers.A;
-            const result = prev - registers[getStandardRegisterLow3(opcode)];
+            const result = prev - registers.values[getStandardRegisterLow3(opcode)];
             registers.flagZ = result === 0;
             registers.flagN = true;
             registers.flagH = (prev & 0xF) < (result & 0xF);
             registers.flagC = (result < 0);
             break;
         }
-        case primaryGroupNames.comparePtrWithAccum: // CP n
+        case PrimaryGroupNames.comparePtrWithAccum: // CP n
         {
             const prev = registers.A;
             const result = prev - mmu.read(registers.HL);
@@ -859,7 +854,7 @@ function tick(cpuState){
             registers.flagC = (result < 0);
             break;
         }
-        case primaryGroupNames.conditionalReturnFlag:
+        case PrimaryGroupNames.conditionalReturnFlag:
         {
             let takeBranch = false;
             switch(opcode){
@@ -881,13 +876,13 @@ function tick(cpuState){
             if(takeBranch){
                 registers.PC = mmu.read16(registers.SP);
                 registers.SP += 2;
-                cycleIncrement = cycleIncrement[0];
+                cycleIncrement = opcodeGroup.cycleCount[0];
             }else{
-                cycleIncrement = cycleIncrement[1];
+                cycleIncrement = opcodeGroup.cycleCount[1];
             }
             break;
         }
-        case primaryGroupNames.popStack16:
+        case PrimaryGroupNames.popStack16:
         {
             const data = mmu.read16(registers.SP);
             switch(opcode){
@@ -907,7 +902,7 @@ function tick(cpuState){
             registers.SP += 2;
             break;
         }
-        case primaryGroupNames.conditionalJumpFlagImmediate16:
+        case PrimaryGroupNames.conditionalJumpFlagImmediate16:
         {
             let takeBranch = false;
             switch(opcode){
@@ -930,16 +925,16 @@ function tick(cpuState){
             registers.PC += 2;
             if(takeBranch){    
                 registers.PC = jumpTarget;
-                cycleIncrement = cycleIncrement[0];
+                cycleIncrement = opcodeGroup.cycleCount[0];
             }else{
-                cycleIncrement = cycleIncrement[1];
+                cycleIncrement = opcodeGroup.cycleCount[1];
             }
             break;
         }
-        case primaryGroupNames.jumpImmediate16:
+        case PrimaryGroupNames.jumpImmediate16:
             registers.PC = mmu.read16(registers.PC);
             break;
-        case primaryGroupNames.conditionalCallFlagImmediate16:
+        case PrimaryGroupNames.conditionalCallFlagImmediate16:
         {
             let takeBranch = false;
             switch(opcode){
@@ -964,13 +959,13 @@ function tick(cpuState){
                 registers.SP -= 2;
                 mmu.write16(registers.SP, registers.PC);
                 registers.PC = func;
-                cycleIncrement = cycleIncrement[0];
+                cycleIncrement = opcodeGroup.cycleCount[0];
             }else{
-                cycleIncrement = cycleIncrement[1];
+                cycleIncrement = opcodeGroup.cycleCount[1];
             }
             break;
         }
-        case primaryGroupNames.pushStack16:
+        case PrimaryGroupNames.pushStack16:
         {
             registers.SP -= 2;
             let data;
@@ -989,11 +984,12 @@ function tick(cpuState){
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
+                    data = 0;
             }
             mmu.write16(registers.SP, data);
             break;
         }
-        case primaryGroupNames.addImmediate8ToAccum: // ADD a,n
+        case PrimaryGroupNames.addImmediate8ToAccum: // ADD a,n
         {
             const prev = registers.A;
             const result = prev + mmu.read(registers.PC++);
@@ -1004,7 +1000,7 @@ function tick(cpuState){
             registers.flagH = (prev & 0xF) > (result & 0xF);
             break;
         }
-        case primaryGroupNames.reset:
+        case PrimaryGroupNames.reset:
         {
             let targetAddress;
             switch(opcode){
@@ -1034,23 +1030,24 @@ function tick(cpuState){
                     break;
                 default:
                     console.warn("unexpected opcode", opcode);
+                    targetAddress = 0x00;
             }
             registers.SP -= 2;
             mmu.write16(registers.SP, registers.PC);
             registers.PC = targetAddress;
             break;
         }
-        case primaryGroupNames.return:
+        case PrimaryGroupNames.return:
             registers.PC = mmu.read16(registers.SP);
             registers.SP += 2;
             if(opcode === 0xD9){
                 cpuState.interruptsEnabled = true;
             }
             break;
-        case primaryGroupNames.extendedOpcode:
-            cycleIncrement = extendedTick();
+        case PrimaryGroupNames.extendedOpcode:
+            cycleIncrement = extendedTick(registers, mmu);
             break;
-        case primaryGroupNames.callImmediate16:
+        case PrimaryGroupNames.callImmediate16:
         {
             const func = mmu.read16(registers.PC);
             registers.PC += 2;
@@ -1059,7 +1056,7 @@ function tick(cpuState){
             registers.PC = func;
             break;
         }
-        case primaryGroupNames.addCarryImmediate8ToAccum: // ADC A,n
+        case PrimaryGroupNames.addCarryImmediate8ToAccum: // ADC A,n
         {
             const prev = registers.A;
             const add = mmu.read(registers.PC++);
@@ -1072,7 +1069,7 @@ function tick(cpuState){
 
             break;
         }
-        case primaryGroupNames.subImmediate8FromAccum: // SUB n
+        case PrimaryGroupNames.subImmediate8FromAccum: // SUB n
         {
             const prev = registers.A;
             const diff = prev - mmu.read(registers.PC++);
@@ -1084,7 +1081,7 @@ function tick(cpuState){
             registers.flagH = (prev & 0xF) < (result & 0xF);
             break;
         }
-        case primaryGroupNames.subCarryImmediate8FromAccum: // SBC A,n
+        case PrimaryGroupNames.subCarryImmediate8FromAccum: // SBC A,n
         {
             const prev = registers.A;
             const sub = mmu.read(registers.PC++);
@@ -1097,13 +1094,13 @@ function tick(cpuState){
             registers.flagC = (diff < 0);
             break;
         }
-        case primaryGroupNames.ioPortWriteImmediate8:
+        case PrimaryGroupNames.ioPortWriteImmediate8:
             mmu.write(0xFF00 + mmu.read(registers.PC++), registers.A);
             break;
-        case primaryGroupNames.ioPortWriteRegister8:
+        case PrimaryGroupNames.ioPortWriteRegister8:
             mmu.write(0xFF00 + registers.C, registers.A);
             break;
-        case primaryGroupNames.andImmediate8WithAccum: // AND n
+        case PrimaryGroupNames.andImmediate8WithAccum: // AND n
         {
             const prev = registers.A;
             const result = prev & mmu.read(registers.PC++);
@@ -1114,7 +1111,7 @@ function tick(cpuState){
             registers.flagH = true; // known good 
             break;
         }
-        case primaryGroupNames.addImmediate8ToStackPtr:
+        case PrimaryGroupNames.addImmediate8ToStackPtr:
         {
             const prev = registers.SP;
             const arg = mmu.read(registers.PC++);
@@ -1127,17 +1124,17 @@ function tick(cpuState){
             registers.flagH = (prev & 0xF) + (arg & 0xF) > 0xF;
             break;
         }
-        case primaryGroupNames.jumpPtr:
+        case PrimaryGroupNames.jumpPtr:
             registers.PC = registers.HL;
             break;
-        case primaryGroupNames.loadRegisterToImmediate16Ptr:
+        case PrimaryGroupNames.loadRegisterToImmediate16Ptr:
         {
             const addr = mmu.read16(registers.PC);
             registers.PC += 2;
             mmu.write(addr, registers.A);
             break;
         }
-        case primaryGroupNames.xorImmediate8WithAccum: // XOR n
+        case PrimaryGroupNames.xorImmediate8WithAccum: // XOR n
         {
             const prev = registers.A;
             const result = prev ^ mmu.read(registers.PC++);
@@ -1148,16 +1145,16 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.ioPortReadImmediate8:
+        case PrimaryGroupNames.ioPortReadImmediate8:
             registers.A = mmu.read(0xFF00 + mmu.read(registers.PC++));
             break;
-        case primaryGroupNames.ioPortReadRegister8:
+        case PrimaryGroupNames.ioPortReadRegister8:
             registers.A = mmu.read(0xFF00 + registers.C);
             break;
-        case primaryGroupNames.disableInterrupts:
+        case PrimaryGroupNames.disableInterrupts:
             cpuState.interruptsEnabled = false;
             break;
-        case primaryGroupNames.orImmediate8WithAccum: // OR n
+        case PrimaryGroupNames.orImmediate8WithAccum: // OR n
         {
             const prev = registers.A;
             const result = prev | mmu.read(registers.PC++);
@@ -1168,7 +1165,7 @@ function tick(cpuState){
             registers.flagN = false;
             break;
         }
-        case primaryGroupNames.addImmediate8ToStackPtrToRegister16: // LDHL SP,n
+        case PrimaryGroupNames.addImmediate8ToStackPtrToRegister16: // LDHL SP,n
         {
             const prev = registers.SP;
             const arg = mmu.read(registers.PC++);
@@ -1181,17 +1178,17 @@ function tick(cpuState){
             registers.flagH = (prev & 0xF) + (arg & 0xF) > 0xF;
             break;
         }
-        case primaryGroupNames.loadRegister16ToStackPtr:
+        case PrimaryGroupNames.loadRegister16ToStackPtr:
             registers.SP = registers.HL;
             break;
-        case primaryGroupNames.loadImmediate16PtrToRegister:
+        case PrimaryGroupNames.loadImmediate16PtrToRegister:
             registers.A = mmu.read(mmu.read16(registers.PC));
             registers.PC += 2;
             break;
-        case primaryGroupNames.enableInterrupts:
+        case PrimaryGroupNames.enableInterrupts:
             cpuState.interruptsEnabled = true;
             break;
-        case primaryGroupNames.compareImmediate8WithAccum: // CP n
+        case PrimaryGroupNames.compareImmediate8WithAccum: // CP n
         {
             const prev = registers.A;
             const result = prev - mmu.read(registers.PC++);
@@ -1204,7 +1201,6 @@ function tick(cpuState){
         default:
             console.warn("Unimplemented opcode group", opcodeGroup, opcode);
             throw new Error();
-            registers.PC += opcodeGroup.byteCount - 1;
     }
     /*
     if(Array.isArray(cycleIncrement)){
@@ -1214,86 +1210,86 @@ function tick(cpuState){
     return cycleIncrement;
 }
 
-class CPU {
-    #cpuState;
-    constructor(){
-        this.#cpuState = {
-            awaitingInterrupt: false,
-            interruptsEnabled: false,
-        };
+class CPUState {
+    awaitingInterrupt = false;
+    interruptsEnabled = false;
+}
+
+export default class CPU {
+    #cpuState = new CPUState();
+    #registers = new Registers();
+    #mmu;
+    constructor(mmu : MMU){
+        this.#mmu = mmu;
     }
+    
     tick(){
-        return tick(this.#cpuState);
+        return tick(this.#cpuState, this.#registers, this.#mmu);
     }
-    // Temporary hack
-    setMmu(mmuRef){
-        mmu = mmuRef;
-    }
-    registerGpuCallbacks(gpu){
+
+    registerGpuCallbacks(gpu : PixelProcessingUnit){
         // first arg to each callback is whether the interrupt is enabled on the gpu STAT register
         // since these callbacks trip other things they're dispatched regardless
         gpu.onVblank((gpuInterruptEnabled) =>{
             //vblank interrupt
-            if(mmu.read(0xFFFF) & 0x1){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x1);
+            if(this.#mmu.read(0xFFFF) & 0x1){
+                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x1);
             }
             //stat interrupt
             if(gpuInterruptEnabled){
-                if(mmu.read(0xFFFF) & 0x2){
-                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                if(this.#mmu.read(0xFFFF) & 0x2){
+                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
                 }
                 this.#cpuState.awaitingInterrupt = false;
             }
         });
         gpu.onHblank((gpuInterruptEnabled) =>{
             if(gpuInterruptEnabled){
-                if(mmu.read(0xFFFF) & 0x2){
-                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                if(this.#mmu.read(0xFFFF) & 0x2){
+                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
                 }  
                 this.#cpuState.awaitingInterrupt = false;
             }
         });
         gpu.onLyc((gpuInterruptEnabled) =>{
             if(gpuInterruptEnabled){
-                if(mmu.read(0xFFFF) & 0x2){
-                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                if(this.#mmu.read(0xFFFF) & 0x2){
+                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
                 }
                 this.#cpuState.awaitingInterrupt = false;
             }
         });
         gpu.onOam((gpuInterruptEnabled) =>{
             if(gpuInterruptEnabled){
-                if(mmu.read(0xFFFF) & 0x2){
-                    mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x2);
+                if(this.#mmu.read(0xFFFF) & 0x2){
+                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
                 }
                 this.#cpuState.awaitingInterrupt = false;
             }
         });
     }
-    registerJoypadCallbacks(joypad){
+    registerJoypadCallbacks(joypad : JoypadBase){
         joypad.onButtonDown((buttonInterruptEnabled) => {
-            if(buttonInterruptEnabled && mmu.read(0xFFFF) & 0x10){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x10);
+            if(buttonInterruptEnabled && this.#mmu.read(0xFFFF) & 0x10){
+                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x10);
             }
             this.#cpuState.awaitingInterrupt = false;
         });
     }
-    registerTimerCallbacks(timer){
+    registerTimerCallbacks(timer : Timer){
         timer.onCounterOverflow(() => {
-            if(mmu.read(0xFFFF) & 0x4){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x4);
+            if(this.#mmu.read(0xFFFF) & 0x4){
+                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x4);
             }
             this.#cpuState.awaitingInterrupt = false;
         });
     }
-    registerSerialCallbacks(serial){
+    registerSerialCallbacks(serial : Serial){
         serial.onTransfer(() => {
-            if(mmu.read(0xFFFF) & 0x8){
-                mmu.write(0xFF0F, mmu.read(0xFF0F) | 0x8);
+            if(this.#mmu.read(0xFFFF) & 0x8){
+                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x8);
             }
             this.#cpuState.awaitingInterrupt = false;
         });
     }
 }
-
-export default new CPU();

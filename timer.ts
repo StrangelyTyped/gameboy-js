@@ -1,22 +1,24 @@
-export default class Timer {
-    #registers;
-    #callbacks = [];
-    #cycleCounters;
-    #timerFreq;
+import { Clocked } from "./utils.js";
+
+type callback = () => any;
+
+export default class Timer implements Clocked {
+    #registers = {
+        divider: 0,
+        counter: 0,
+        modulo: 0,
+        control: 0,
+    };
+    #callbacks : callback[] = [];
+    #cycleCounters = {
+        divider: 0,
+        timer: 0,
+    };
+    #timerFreq = 0;
     constructor(){
-        this.#registers = {
-            divider: 0,
-            counter: 0,
-            modulo: 0,
-            control: 0,
-        }
-        this.#cycleCounters = {
-            divider: 0,
-            timer: 0,
-        }
         this.writeRegister(0xFF07, 0);
     }
-    tick(cycles){
+    tick(cycles : number){
         this.#cycleCounters.divider += cycles;
         while(this.#cycleCounters.divider > 16384){
             this.#cycleCounters.divider -= 16384;
@@ -34,11 +36,11 @@ export default class Timer {
             }
         }
     }
-    onCounterOverflow(cb){
+    onCounterOverflow(cb : callback){
         this.#callbacks.push(cb);
     }
-    readRegister(k){
-        switch(k){
+    readRegister(addr : number){
+        switch(addr){
             case 0xFF04:
                 return this.#registers.divider;
             case 0xFF05:
@@ -48,24 +50,24 @@ export default class Timer {
             case 0xFF07:
                 return this.#registers.control;
             default:
-                console.warn("Timer read unexpected register", k);
+                console.warn("Timer read unexpected register", addr);
         }
         return 0;
     }
-    writeRegister(k, v){
-        switch(k){
+    writeRegister(addr : number, val : number){
+        switch(addr){
             case 0xFF04:
                 this.#registers.divider = 0;
                 break;
             case 0xFF05:
-                this.#registers.counter = v;
+                this.#registers.counter = val;
                 break;
             case 0xFF06:
-                this.#registers.modulo = v;
+                this.#registers.modulo = val;
                 break;
             case 0xFF07:
-                this.#registers.control = v & 0x7;
-                switch(v & 0x3){
+                this.#registers.control = val & 0x7;
+                switch(val & 0x3){
                     case 0:
                         this.#timerFreq = 1024;
                         break;
@@ -81,7 +83,7 @@ export default class Timer {
                 }
                 break;
             default:
-                console.warn("Timer write unexpected register", k, v);
+                console.warn("Timer write unexpected register", addr, val);
         }
     }
 }
