@@ -53,9 +53,9 @@ export default class VRamDebugDisplay {
                 scrollX.innerText = mmu.read(0xFF43).toString();
                 scrollY.innerText = mmu.read(0xFF42).toString();
                 const lcdc = mmu.read(0xFF40);
-                bgTileMap.innerText = lcdc & 0x08 ? "9800" : "9C00";
-                winTileMap.innerText = lcdc & 0x40 ? "9800" : "9C00";
-                tileData.innerText = lcdc & 0x10 ? "8800" : "8000";
+                bgTileMap.innerText = lcdc & 0x08 ? "9C00" : "9800";
+                winTileMap.innerText = lcdc & 0x40 ? "9C00" : "9800";
+                tileData.innerText = lcdc & 0x10 ? "8000" : "8800";
             }
         });
     }
