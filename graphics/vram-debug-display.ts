@@ -1,20 +1,26 @@
 import MMU from "../memory/mmu.js";
 import PixelProcessingUnit from "./ppu.js";
-import WinBox from "https://unpkg.com/winbox@0.2.0/src/js/winbox.js";
+import DebugWindow from "../debug-window.js";
 import CanvasRenderer from "./canvas-renderer.js";
 
 
-export default class VRamDebugDisplay {
-    #vramViewer : WinBox | null = null;
+export default class VRamDebugDisplay extends DebugWindow {
+    #ppu;
+    #mmu;
+    #debugCanvasRenderer;
+    #displayElements : Record<string, HTMLElement>;
     constructor(mmu : MMU, ppu : PixelProcessingUnit){
-        const vramViewerButton = <HTMLElement>document.getElementById("debug-show-vram-viewer");
-        const vramViewerContent = <HTMLElement>document.getElementById("debug-vram-viewer-content");
-        const debugCanvasRenderer = new CanvasRenderer(<HTMLCanvasElement>document.getElementById("vram-canvas"));
-        const scrollX = <HTMLElement>document.getElementById("debug-vram-scrollx");
-        const scrollY = <HTMLElement>document.getElementById("debug-vram-scrolly");
-        const bgTileMap = <HTMLElement>document.getElementById("debug-vram-bgtilemap");
-        const winTileMap = <HTMLElement>document.getElementById("debug-vram-wintilemap");
-        const tileData = <HTMLElement>document.getElementById("debug-vram-tiledata");
+        super(ppu, "VRAM Viewer", 300, 650, "debug-vram-viewer-content");
+        this.#ppu = ppu;
+        this.#mmu = mmu;
+        this.#debugCanvasRenderer = new CanvasRenderer(<HTMLCanvasElement>this.getWindowContent().querySelector("canvas"));
+        this.#displayElements = {
+            scrollX: <HTMLElement>this.getWindowContent().querySelector("[data-display-var=scrollx]"),
+            scrollY: <HTMLElement>this.getWindowContent().querySelector("[data-display-var=scrolly]"),
+            bgTileMap: <HTMLElement>this.getWindowContent().querySelector("[data-display-var=bgtilemap]"),
+            winTileMap: <HTMLElement>this.getWindowContent().querySelector("[data-display-var=wintilemap]"),
+            tileData: <HTMLElement>this.getWindowContent().querySelector("[data-display-var=tiledata]"),
+        }
 
         const highlightBg = <HTMLInputElement>document.getElementById("vram-highlight-bg");
         const highlightWin = <HTMLInputElement>document.getElementById("vram-highlight-win");
@@ -29,36 +35,21 @@ export default class VRamDebugDisplay {
         highlightSprite.addEventListener("input", (e) => {
             ppu.debugSetHighlightSprite(highlightSprite.checked);
         });
-        
-        vramViewerButton.addEventListener("click", () => {
-            if(!this.#vramViewer){
-                this.#vramViewer = new WinBox({
-                    title: "VRAM Viewer",
-                    mount: vramViewerContent,
-                    width: "300px",
-                    height: "650px",
-                    x: "right",
-                    onclose: () => {
-                        this.#vramViewer = null;
-                    }
-                });
-            }
-        });
-
-        ppu.onVblank(() => {
-            if(this.#vramViewer){
-                const tileMap = parseInt((<HTMLInputElement>document.querySelector("input[name=vram-map]:checked")).value) || -1;
-                const tileBank = parseInt((<HTMLInputElement>document.querySelector("input[name=vram-bank]:checked")).value) || -1;
-                ppu.debugRenderVram(debugCanvasRenderer, tileMap, tileBank);
-                scrollX.innerText = mmu.read(0xFF43).toString();
-                scrollY.innerText = mmu.read(0xFF42).toString();
-                const lcdc = mmu.read(0xFF40);
-                bgTileMap.innerText = lcdc & 0x08 ? "9C00" : "9800";
-                winTileMap.innerText = lcdc & 0x40 ? "9C00" : "9800";
-                tileData.innerText = lcdc & 0x10 ? "8000" : "8800";
-            }
-        });
     }
+        
+
+    update() {
+        const tileMap = parseInt((<HTMLInputElement>this.getWindowContent().querySelector("input[name=vram-map]:checked")).value) || -1;
+        const tileBank = parseInt((<HTMLInputElement>this.getWindowContent().querySelector("input[name=vram-bank]:checked")).value) || -1;
+        this.#ppu.debugRenderVram(this.#debugCanvasRenderer, tileMap, tileBank);
+        this.#displayElements.scrollX.innerText = this.#mmu.read(0xFF43).toString();
+        this.#displayElements.scrollY.innerText = this.#mmu.read(0xFF42).toString();
+        const lcdc = this.#mmu.read(0xFF40);
+        this.#displayElements.bgTileMap.innerText = lcdc & 0x08 ? "9C00" : "9800";
+        this.#displayElements.winTileMap.innerText = lcdc & 0x40 ? "9C00" : "9800";
+        this.#displayElements.tileData.innerText = lcdc & 0x10 ? "8000" : "8800";
+    }
+    
 
     
     

@@ -23,8 +23,7 @@
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             Debug
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item" href="#" id="debug-show-vram-viewer">VRAM viewer</a></li>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdown" id="debug-menu">
                         </ul>
                     </li>
                 </ul>
@@ -50,49 +49,49 @@
             <table class="table table-sm">
                 <tr>
                     <th scope="row">ScrollX:</th>
-                    <td id="debug-vram-scrollx">0</td>
+                    <td data-display-var="scrollx">0</td>
                     <th scope="row">ScrollY:</th>
-                    <td id="debug-vram-scrolly">0</td>
+                    <td data-display-var="scrolly">0</td>
                 </tr>
                 <tr>
                     <th scope="row">BG Map:</th>
-                    <td id="debug-vram-bgtilemap">?</td>
+                    <td data-display-var="bgtilemap">?</td>
                     <th scope="row">Win Map:</th>
-                    <td id="debug-vram-wintilemap">?</td>
+                    <td data-display-var="wintilemap">?</td>
                 </tr>
                 <tr>
                     <th scope="row">Tile Data:</th>
-                    <td id="debug-vram-tiledata">?</td>
+                    <td data-display-var="tiledata">?</td>
                 </tr>
             </table>
-            <canvas style="border: 1px solid black;" width="256" height="256" id="vram-canvas"></canvas>
+            <canvas style="border: 1px solid black;" width="256" height="256"></canvas>
             <fieldset class="pt-1">
                 <legend class="h6">Render With BG Tile Map Bank</legend>
                 <div class="form-check form-check-inline">
-                    <input type="radio" class="form-check-input" name="vram-map" id="vram-map-active" value="-1" autocomplete="off" checked>
+                    <input type="radio" class="form-check-input" name="vram-map" value="-1" autocomplete="off" checked>
                     <label class="form-check-label" for="vram-map-active">Active</label>
                 </div>
                 <div class="form-check form-check-inline">
-                    <input type="radio" class="form-check-input" name="vram-map" id="vram-map-0" value="0" autocomplete="off">
+                    <input type="radio" class="form-check-input" name="vram-map" value="0" autocomplete="off">
                     <label class="form-check-label" for="vram-map-0">9800</label>
                 </div>
                 <div class="form-check form-check-inline">
-                    <input type="radio" class="form-check-input" name="vram-map" id="vram-map-1" value="1" autocomplete="off">
+                    <input type="radio" class="form-check-input" name="vram-map" value="1" autocomplete="off">
                     <label class="form-check-label" for="vram-map-1">9C00</label>
                 </div>
             </fieldset>
             <fieldset class="pt-1">
-                <legend class="h6">Render With BG Tile Data Bank</legend>
+                <legend class="h6">Render With Tile Data Bank</legend>
                 <div class="form-check form-check-inline">
-                    <input type="radio" class="form-check-input" name="vram-bank" id="vram-bank-active" value="-1" autocomplete="off" checked>
+                    <input type="radio" class="form-check-input" name="vram-bank" value="-1" autocomplete="off" checked>
                     <label class="form-check-label" for="vram-bank-active">Active</label>
                 </div>
                 <div class="form-check form-check-inline">
-                    <input type="radio" class="form-check-input" name="vram-bank" id="vram-bank-0" value="0" autocomplete="off">
+                    <input type="radio" class="form-check-input" name="vram-bank" value="0" autocomplete="off">
                     <label class="form-check-label" for="vram-bank-0">8800</label>
                 </div>
                 <div class="form-check form-check-inline">
-                    <input type="radio" class="form-check-input" name="vram-bank" id="vram-bank-1" value="1" autocomplete="off">
+                    <input type="radio" class="form-check-input" name="vram-bank" value="1" autocomplete="off">
                     <label class="form-check-label" for="vram-bank-1">8000</label>
                 </div>
             </fieldset>
