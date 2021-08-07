@@ -19,7 +19,8 @@ export default class AudioController implements MemoryMappable, Clocked {
         soundEnabled: false //FF26 bit 7
     };
     #audioContext : AudioContext | null = null;
-    #gateNodes : GainNode[][] = [];
+    #debugGateNodes : GainNode[] = [];
+    #panGateNodes : GainNode[][] = [];
     #masterGainLeft : GainNode | null = null;
     #masterGainRight : GainNode | null = null;
     #masterGainOutput : GainNode | null = null;
@@ -45,24 +46,27 @@ export default class AudioController implements MemoryMappable, Clocked {
         // then a pair of gain nodes for left/right overall
         // then combine those two into stereo output
 
-        this.#gateNodes = [];
+        this.#panGateNodes = [];
 
         this.#masterGainLeft = this.#audioContext.createGain();
         this.#masterGainRight = this.#audioContext.createGain();
 
         for(let i = 0; i < this.#channels.length; i++){
+            const debugGate = this.#audioContext.createGain();
             const gateNodes = [
                 this.#audioContext.createGain(),
                 this.#audioContext.createGain(),
             ];
-            this.#gateNodes.push(gateNodes);
+            this.#debugGateNodes.push(debugGate);
+            this.#panGateNodes.push(gateNodes);
             const output = this.#channels[i].getOutputNode();
             if(!output){
                 console.warn("Channel",i,"disabled by hardware implementation");
                 continue;
             }
-            output.connect(gateNodes[0]);
-            output.connect(gateNodes[1]);
+            output.connect(debugGate);
+            debugGate.connect(gateNodes[0]);
+            debugGate.connect(gateNodes[1]);
             gateNodes[0].connect(this.#masterGainLeft);
             gateNodes[1].connect(this.#masterGainRight);
         }
@@ -119,8 +123,8 @@ export default class AudioController implements MemoryMappable, Clocked {
             this.#registerData.channelOutput = val;
             // Ch 1
             for(let i = 0; i < 4; i++){
-                this.#gateNodes[i][0].gain.value = (val & (0x10 << i)) >> (4 + i);
-                this.#gateNodes[i][1].gain.value = (val & (0x1 << i)) >> i;
+                this.#panGateNodes[i][0].gain.value = (val & (0x10 << i)) >> (4 + i);
+                this.#panGateNodes[i][1].gain.value = (val & (0x1 << i)) >> i;
             }
         } else if(addr === 0xFF26) {
             this.#registerData.soundEnabled = (val & 0x80) !== 0;
@@ -129,6 +133,9 @@ export default class AudioController implements MemoryMappable, Clocked {
         }else{
             console.warn("Audio write unexpected register", addr, val)
         }
+    }
+    debugSetChannelEnabled(channelId : number, enabled : boolean){
+        this.#debugGateNodes[channelId].gain.value = (enabled ? 1 : 0);
     }
     tick(cycles : number){
 

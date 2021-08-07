@@ -13,6 +13,7 @@ import CPU from "./cpu/cpu.js";
 
 import { FpsCounter, loadBlob } from "./utils.js"
 import VRamDebugDisplay from "./graphics/vram-debug-display.js";
+import AudioDebugDisplay from "./audio/audio-debug-display.js";
 
 async function initialize(){
     const mmu = new MMU(LocalStorageRamPersistence);
@@ -61,6 +62,7 @@ async function initialize(){
     });
 
     new VRamDebugDisplay(mmu, ppu);
+    new AudioDebugDisplay(mmu, ppu, audio);
 
     let paused = false;
     let initialised = false;
