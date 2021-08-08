@@ -1,9 +1,4 @@
-import AudioController from "../audio/audio-controller.js";
-import PixelProcessingUnit from "../graphics/ppu.js";
-import JoypadBase from "../joypad/joypad-base.js";
-import Serial from "../serial/serial.js";
-import Timer from "../timer.js";
-import {readString, makeBuffer} from "../utils.js";
+import {readString, makeBuffer, MemoryMappable} from "../utils.js";
 import MBC from "./mbc/mbc.js";
 import MBC1 from "./mbc/mbc1.js";
 import MBC3 from "./mbc/mbc3.js";
@@ -36,11 +31,11 @@ export default class MMU {
     #romBankCount = 2;
     #ramBankCount = 1;
 
-    #ppu : PixelProcessingUnit | null = null;
-    #joypad : JoypadBase | null = null;
-    #timer : Timer | null = null;
-    #serial : Serial | null = null;
-    #audio : AudioController | null = null;
+    #ppu : MemoryMappable | null = null;
+    #joypad : MemoryMappable | null = null;
+    #timer : MemoryMappable | null = null;
+    #serial : MemoryMappable | null = null;
+    #audio : MemoryMappable | null = null;
     constructor(persistenceFactory : PersistenceFactory){
         this.#persistenceFactory = persistenceFactory;
         this.setCartridgeType(0, 0, 0);
@@ -339,19 +334,19 @@ export default class MMU {
             this.mapRomBank(j, Array.prototype.slice.apply(data, [i, i+0x4000]))
         }
     }
-    mapGraphics(ppu : PixelProcessingUnit){
+    mapGraphics(ppu : MemoryMappable){
         this.#ppu = ppu;
     }
-    mapJoypad(joypad : JoypadBase){
+    mapJoypad(joypad : MemoryMappable){
         this.#joypad = joypad;
     }
-    mapTimer(timer : Timer){
+    mapTimer(timer : MemoryMappable){
         this.#timer = timer;
     }
-    mapSerial(serial : Serial){
+    mapSerial(serial : MemoryMappable){
         this.#serial = serial;
     }
-    mapAudio(audio : AudioController){
+    mapAudio(audio : MemoryMappable){
         this.#audio = audio;
     }
 }
