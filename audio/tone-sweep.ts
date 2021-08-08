@@ -6,7 +6,7 @@ class FrequencySweepParams {
     step = 0;
     registerValue = 0;
     setRegister(val : number){
-        this.registerValue = this.registerValue;
+        this.registerValue = val;
         this.time = (val & 0x70) >> 4;
         this.direction = (val & 0x8) >> 3;
         this.step = (val & 0x7);

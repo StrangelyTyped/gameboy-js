@@ -6,7 +6,7 @@ export class VolumeEnvelopeParams {
     step = 0;
     registerValue = 0;
     setRegister(val : number){
-        this.registerValue = this.registerValue;
+        this.registerValue = val;
         this.initial = (val & 0xF0) >> 4;
         this.direction = (val & 0x8) >> 3;
         this.step = (val & 0x7);

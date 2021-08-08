@@ -105,7 +105,7 @@ export default class WaveAudioChannel implements AudioChannel {
             const sample1 = processWaveSample((this.#waveRam[i] & 0xF0) >> 4, this.#registerData.volumeMode);
             const sample2 = processWaveSample(this.#waveRam[i] & 0xF, this.#registerData.volumeMode);
             this.#nodeParams.waveData[j].value = sample1;
-            this.#nodeParams.waveData[j + 1].value = sample1;
+            this.#nodeParams.waveData[j + 1].value = sample2;
         }
     }
     readWaveRam(addr : number){
