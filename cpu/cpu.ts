@@ -1227,69 +1227,56 @@ export default class CPU {
         return tick(this.#cpuState, this.#registers, this.#mmu);
     }
 
+    #notifyInterrupt(interruptMask : number){
+        if(this.#mmu.read(0xFFFF) & interruptMask){
+            this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | interruptMask);
+            this.#cpuState.awaitingInterrupt = false;
+        }
+    }
+
     registerGpuCallbacks(gpu : PixelProcessingUnit){
         // first arg to each callback is whether the interrupt is enabled on the gpu STAT register
         // since these callbacks trip other things they're dispatched regardless
         gpu.onVblank((gpuInterruptEnabled) =>{
             //vblank interrupt
-            if(this.#mmu.read(0xFFFF) & 0x1){
-                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x1);
-            }
+            this.#notifyInterrupt(0x1);
+            
             //stat interrupt
             if(gpuInterruptEnabled){
-                if(this.#mmu.read(0xFFFF) & 0x2){
-                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
-                }
-                this.#cpuState.awaitingInterrupt = false;
+                this.#notifyInterrupt(0x2);
             }
         });
         gpu.onHblank((gpuInterruptEnabled) =>{
             if(gpuInterruptEnabled){
-                if(this.#mmu.read(0xFFFF) & 0x2){
-                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
-                }  
-                this.#cpuState.awaitingInterrupt = false;
+                this.#notifyInterrupt(0x2);
             }
         });
         gpu.onLyc((gpuInterruptEnabled) =>{
             if(gpuInterruptEnabled){
-                if(this.#mmu.read(0xFFFF) & 0x2){
-                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
-                }
-                this.#cpuState.awaitingInterrupt = false;
+                this.#notifyInterrupt(0x2);
             }
         });
         gpu.onOam((gpuInterruptEnabled) =>{
             if(gpuInterruptEnabled){
-                if(this.#mmu.read(0xFFFF) & 0x2){
-                    this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x2);
-                }
-                this.#cpuState.awaitingInterrupt = false;
+                this.#notifyInterrupt(0x2);
             }
         });
     }
     registerJoypadCallbacks(joypad : JoypadBase){
         joypad.onButtonDown((buttonInterruptEnabled) => {
-            if(buttonInterruptEnabled && this.#mmu.read(0xFFFF) & 0x10){
-                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x10);
+            if(buttonInterruptEnabled){
+                this.#notifyInterrupt(0x10);
             }
-            this.#cpuState.awaitingInterrupt = false;
         });
     }
     registerTimerCallbacks(timer : Timer){
         timer.onCounterOverflow(() => {
-            if(this.#mmu.read(0xFFFF) & 0x4){
-                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x4);
-            }
-            this.#cpuState.awaitingInterrupt = false;
+            this.#notifyInterrupt(0x4);
         });
     }
     registerSerialCallbacks(serial : Serial){
         serial.onTransfer(() => {
-            if(this.#mmu.read(0xFFFF) & 0x8){
-                this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | 0x8);
-            }
-            this.#cpuState.awaitingInterrupt = false;
+            this.#notifyInterrupt(0x8);
         });
     }
 }
