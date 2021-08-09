@@ -1,6 +1,6 @@
 import PixelProcessingUnit from "../graphics/ppu.js";
 import JoypadBase from "../joypad/joypad-base.js";
-import MMU from "../memory/mmu.js";
+import Memory from "../memory/memory.js";
 import Serial from "../serial/serial.js";
 import Timer from "../timer.js";
 import { uint8ToInt8 } from "../utils.js";
@@ -37,7 +37,7 @@ function getStandardRegisterMid3(opcode : number){
     return standardOpcodeRegisterMappingMid3[(opcode & 0x8) >> 3][(opcode & 0x30) >> 4];
 }
 
-function extendedTick(registers : Registers, mmu : MMU){
+function extendedTick(registers : Registers, mmu : Memory){
     const opcode = mmu.read(registers.PC++);
     //console.log("Extended opcode", opcode);
     const opcodeGroup = extendedGroups[opcode];
@@ -297,7 +297,7 @@ function extendedTick(registers : Registers, mmu : MMU){
 }
 
 
-function tick(cpuState : CPUState, registers : Registers, mmu : MMU){
+function tick(cpuState : CPUState, registers : Registers, mmu : Memory){
     const interrupts = mmu.read(0xFF0F);
     // service interrupts
     if(cpuState.interruptsEnabled && mmu.read(0xFFFF) && (interrupts & 0x1F)){
@@ -611,19 +611,26 @@ function tick(cpuState : CPUState, registers : Registers, mmu : MMU){
         case PrimaryGroupNames.bcdAdjust: // DAA
         {
             let result = registers.A;
-            if(registers.flagH || (result & 0xF) > 0x9){
-                result = result + (registers.flagN ? -0x6 : 0x6);
-            }
-            if(registers.flagC || (result & 0xF0) > 0x90){
-                result = result + (registers.flagN ? -0x60 : 0x60);
-            }
-            if((result & 0xF) > 9 || (result & 0xF0) > 0x90){
-                console.warn("Bad DAA", registers.A, result & 0xFF);
+            if(registers.flagN){
+                if(registers.flagH){
+                    result -= 0x6;
+                }
+                if(registers.flagC){
+                    result -= 0x60;
+                }
+            } else {
+                if(registers.flagH || (result & 0xF) > 0x9){
+                    result += 0x6;
+                }
+                if(registers.flagC || (result & 0xFFF0) > 0x90){
+                    result += 0x60;
+                }
+                // flagC is preserved for subtractions
+                registers.flagC = registers.flagC || result > 0xFF;
             }
             registers.A = result & 0xFF;
             registers.flagZ = (result & 0xFF) === 0;
             registers.flagH = false; // known good
-            registers.flagC = result < 0 || result > 0xFF; // "set or reset according to operation" ?
             break;
         }
         case PrimaryGroupNames.bitwiseComplementAccum: // CPL
@@ -1045,7 +1052,7 @@ function tick(cpuState : CPUState, registers : Registers, mmu : MMU){
             }
             break;
         case PrimaryGroupNames.extendedOpcode:
-            cycleIncrement = extendedTick(registers, mmu);
+            cycleIncrement += extendedTick(registers, mmu);
             break;
         case PrimaryGroupNames.callImmediate16:
         {
@@ -1217,10 +1224,11 @@ class CPUState {
 
 export default class CPU {
     #cpuState = new CPUState();
-    #registers = new Registers();
+    #registers;
     #mmu;
-    constructor(mmu : MMU){
+    constructor(mmu : Memory, registers : Registers){
         this.#mmu = mmu;
+        this.#registers = registers;
     }
     
     tick(){

@@ -3,6 +3,7 @@ import MBC from "./mbc/mbc.js";
 import MBC1 from "./mbc/mbc1.js";
 import MBC3 from "./mbc/mbc3.js";
 import RomOnlyMbc from "./mbc/rom-only-mbc.js";
+import Memory from "./memory.js";
 import MMUBankMapping from "./mmu-bank-mapping.js";
 import { PersistenceFactory, RamPersistence } from "./persistence/ram-persistence.js";
 
@@ -22,7 +23,7 @@ class MemoryBanks {
     interruptEnableRegister = 0;
 }
 
-export default class MMU {
+export default class MMU implements Memory {
     #persistenceFactory;
     #ramPersistence : RamPersistence | null = null;
     #banks = new MemoryBanks();

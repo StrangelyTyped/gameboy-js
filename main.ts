@@ -2,25 +2,27 @@
 import JoypadKeyboard from "./joypad/joypad-keyboard.js";
 import Timer from "./timer.js";
 import Serial from "./serial/dummy-serial.js";
-import AudioController from "./audio/audio-controller.js";
+import AudioController from "./audio2/audio-controller.js";
 import MMU from "./memory/mmu.js";
 import LocalStorageRamPersistence from "./memory/persistence/localstorage-persistence.js";
 import PixelProcessingUnit from "./graphics/ppu.js";
 import CanvasRenderer from "./graphics/canvas-renderer.js";
 
-
 import CPU from "./cpu/cpu.js";
 
 import { FpsCounter, loadBlob } from "./utils.js"
 import VRamDebugDisplay from "./graphics/vram-debug-display.js";
-import AudioDebugDisplay from "./audio/audio-debug-display.js";
+import AudioDebugDisplay from "./audio2/audio-debug-display.js";
+import Registers from "./cpu/cpu-registers.js";
 
 async function initialize(){
     const mmu = new MMU(LocalStorageRamPersistence);
-    const cpu = new CPU(mmu);
+    const cpu = new CPU(mmu, new Registers());
     const bios = await loadBlob("roms/gb_bios.bin");
     mmu.mapBootRom(bios);
-    const rom = await loadBlob("roms/Super Mario Land (JUE) (V1.1) [!].gb");
+    //const rom = await loadBlob("roms/Super Mario Land (JUE) (V1.1) [!].gb");
+    const rom = await loadBlob("roms/01-special.gb");
+    //const rom = await loadBlob("roms/tobudx.gb");
     mmu.loadCartridge(rom);
     window.addEventListener("beforeunload", () => mmu.saveRam());
 
