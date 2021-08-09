@@ -15,14 +15,19 @@ import VRamDebugDisplay from "./graphics/vram-debug-display.js";
 import AudioDebugDisplay from "./audio2/audio-debug-display.js";
 import Registers from "./cpu/cpu-registers.js";
 
+let romPath = "roms/Super Mario Land (JUE) (V1.1) [!].gb";
+const params = new URLSearchParams(window.location.search);
+if(params.has("rom")){
+    romPath = <string>params.get("rom");
+}
+
 async function initialize(){
     const mmu = new MMU(LocalStorageRamPersistence);
     const cpu = new CPU(mmu, new Registers());
     const bios = await loadBlob("roms/gb_bios.bin");
     mmu.mapBootRom(bios);
-    //const rom = await loadBlob("roms/Super Mario Land (JUE) (V1.1) [!].gb");
-    const rom = await loadBlob("roms/01-special.gb");
-    //const rom = await loadBlob("roms/tobudx.gb");
+    const rom = await loadBlob(romPath);
+    
     mmu.loadCartridge(rom);
     window.addEventListener("beforeunload", () => mmu.saveRam());
 
