@@ -20,8 +20,8 @@ export default class Timer implements Clocked {
     }
     tick(cycles : number){
         this.#cycleCounters.divider += cycles;
-        while(this.#cycleCounters.divider > 16384){
-            this.#cycleCounters.divider -= 16384;
+        while(this.#cycleCounters.divider > 256){
+            this.#cycleCounters.divider -= 256;
             this.#registers.divider = (this.#registers.divider + 1) & 0xFF;
         }
         if(this.#registers.control & 0x4){
