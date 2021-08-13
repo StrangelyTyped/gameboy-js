@@ -167,5 +167,21 @@ export default class Registers {
             this.F &= 0xEF;
         }
     }
+
+    initPostBoot(isCgbMode : boolean){
+        this.A = 0x11;
+        this.F = 0x80;
+        this.B = 0x00; // not correct for DMG case but probably close enough
+        this.C = 0x00;
+        this.PC = 0x100;
+        this.SP = 0xFFFE;
+        if(isCgbMode){
+            this.DE = 0xFF56;
+            this.HL = 0x000D;
+        }else{
+            this.DE = 0x0008;
+            this.HL = 0x007C; // depends on B
+        }
+    }
 };
 

@@ -2,7 +2,7 @@
 import JoypadKeyboard from "./joypad/joypad-keyboard.js";
 import Timer from "./timer.js";
 import Serial from "./serial/dummy-serial.js";
-import AudioController from "./audio2/audio-controller.js";
+import AudioController from "./audio/audio-controller.js";
 import MMU from "./memory/mmu.js";
 import LocalStorageRamPersistence from "./memory/persistence/localstorage-persistence.js";
 import PixelProcessingUnit from "./graphics/ppu.js";
@@ -12,23 +12,34 @@ import CPU from "./cpu/cpu.js";
 
 import { FpsCounter, loadBlob } from "./utils.js"
 import VRamDebugDisplay from "./graphics/vram-debug-display.js";
-import AudioDebugDisplay from "./audio2/audio-debug-display.js";
+import AudioDebugDisplay from "./audio/audio-debug-display.js";
 import Registers from "./cpu/cpu-registers.js";
 
+let bootRom : string | null = null;
 let romPath = "roms/Super Mario Land (JUE) (V1.1) [!].gb";
 const params = new URLSearchParams(window.location.search);
 if(params.has("rom")){
     romPath = <string>params.get("rom");
 }
+if(params.has("bootrom")){
+    bootRom = <string>params.get("bootrom");
+}
 
 async function initialize(){
     const mmu = new MMU(LocalStorageRamPersistence);
-    const cpu = new CPU(mmu, new Registers());
-    const bios = await loadBlob("roms/gb_bios.bin");
-    mmu.mapBootRom(bios);
+    const cpuRegisters = new Registers();
+    const cpu = new CPU(mmu, cpuRegisters);
+
     const rom = await loadBlob(romPath);
-    
     mmu.loadCartridge(rom);
+
+    if(bootRom){
+        const bios = await loadBlob(bootRom);
+        mmu.mapBootRom(bios);
+    } else {
+        cpuRegisters.initPostBoot(mmu.isColorMode());
+    }
+    
     window.addEventListener("beforeunload", () => mmu.saveRam());
 
     const renderer = new CanvasRenderer(<HTMLCanvasElement>document.getElementById("screen"));

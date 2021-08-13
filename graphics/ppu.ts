@@ -37,6 +37,30 @@ function buildPaletteMap(palette : number){
     ];
 }
 
+const defaultColorPaletteMap = [
+    0x000000,
+    0x000000,
+    0x000000,
+    0x000000,
+];
+
+const colorFactor = 0xFF/0x1F;
+function gbcColorToRgb(colorLo : number, colorHi : number){
+    const r = colorLo & 0x1F;
+    const g = ((colorLo & 0xE0) >> 5) | ((colorHi & 0x3) << 3);
+    const b = (colorHi & 0x7C) >> 2;
+    return (Math.round(r * colorFactor) << 16) | (Math.round(g * colorFactor) << 8) | Math.round(b * colorFactor);
+}
+
+function buildColorPaletteMap(paletteBuffer : Uint8Array, startIdx : number){
+    return [
+        gbcColorToRgb(paletteBuffer[startIdx + 0], paletteBuffer[startIdx + 1]),
+        gbcColorToRgb(paletteBuffer[startIdx + 2], paletteBuffer[startIdx + 3]),
+        gbcColorToRgb(paletteBuffer[startIdx + 4], paletteBuffer[startIdx + 5]),
+        gbcColorToRgb(paletteBuffer[startIdx + 6], paletteBuffer[startIdx + 7]),
+    ];
+}
+
 export default class PixelProcessingUnit implements MemoryMappable, Clocked {
     #renderer;
     #mmu : MMU;
@@ -54,10 +78,22 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
         obj0PaletteMap: buildPaletteMap(0),
         obj1Palette: 0,
         obj1PaletteMap: buildPaletteMap(0),
+        cgbOamPriority: 0,
+
+        colorBgPalettes: makeBuffer(0x40),
+        colorBgPaletteIdx: 0,
+        colorBgPaletteMaps: new Array(8).fill(defaultColorPaletteMap),
+        colorObjPalettes: makeBuffer(0x40),
+        colorObjPaletteIdx: 0,
+        colorObjPaletteMaps: new Array(8).fill(defaultColorPaletteMap),
+        
         interruptFlags: 0,
         mode: PPUMode.MODE_SEARCH_OAM,
         windowRenderY: -1, // internal
         windowActive: false, // internal
+
+        cgbHdmaSource: 0,
+        cgbHdmaDest: 0,
     };
     #tickCounter = 0;
     #scanlineParams = {
@@ -74,7 +110,9 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
     };
     #layerBuffers = {
         bg: makeBuffer(screenW).fill(0),
+        bgFlags: makeBuffer(screenW).fill(0),
         win: makeBuffer(screenW).fill(0),
+        winFlags: makeBuffer(screenW).fill(0),
         obj: makeBuffer(screenW).fill(0),
         objFlags: makeBuffer(screenW).fill(0),
     };
@@ -129,6 +167,23 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
                 return this.#registerData.windowY;
             case 0xFF4B:
                 return this.#registerData.windowX;
+            case 0xFF51:
+            case 0xFF52:
+            case 0xFF53:
+            case 0xFF54:
+                return 0xFF; //CGB HDMA
+            case 0xFF55:
+                return 0xFF;
+            case 0xFF68:
+                return this.#registerData.colorBgPaletteIdx;
+            case 0xFF69:
+                return this.#registerData.colorBgPalettes[this.#registerData.colorBgPaletteIdx & 0x3F];
+            case 0xFF6A:
+                return this.#registerData.colorObjPaletteIdx;
+            case 0xFF6B:
+                return this.#registerData.colorObjPalettes[this.#registerData.colorObjPaletteIdx & 0x3F];
+            case 0xFF6C:
+                return this.#registerData.cgbOamPriority;
             default:
                 console.warn("Unhandled GPU register read", addr);
         }
@@ -181,6 +236,63 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             case 0xFF4B:
                 this.#registerData.windowX = val;
                 break;
+            case 0xFF51:
+                this.#registerData.cgbHdmaSource = (val << 8) | (this.#registerData.cgbHdmaSource & 0xFF);
+                break;
+            case 0xFF52:
+                this.#registerData.cgbHdmaSource = (val & 0xF0) | (this.#registerData.cgbHdmaSource & 0xFF00);
+                break;
+            case 0xFF53:
+                this.#registerData.cgbHdmaDest = (val << 8) | (this.#registerData.cgbHdmaDest & 0xFF);
+                break;
+            case 0xFF54:
+                this.#registerData.cgbHdmaDest = (val & 0xF0) | (this.#registerData.cgbHdmaDest & 0x0F00) | 0x8000;
+                break;
+            case 0xFF55:
+            {
+                if(val & 0x80){
+                    console.warn("Hblank HDMA invoked, unimplemented");
+                    return;
+                }
+                const length = ((val & 0x7F) + 1) * 0x10;
+                for(let i = 0; i < length; i++){
+                    const dest = this.#registerData.cgbHdmaDest + i;
+                    if(dest > 0x9FFF){
+                        break;
+                    }
+                    this.#mmu.write(dest, this.#mmu.read(this.#registerData.cgbHdmaSource + i)); 
+                }
+                break;
+            }
+            case 0xFF68:
+                this.#registerData.colorBgPaletteIdx = val;
+                break;
+            case 0xFF69:
+            {
+                const paletteIdx = this.#registerData.colorBgPaletteIdx & 0x3F;
+                this.#registerData.colorBgPalettes[paletteIdx] = val;
+                this.#registerData.colorBgPaletteMaps[Math.floor(paletteIdx / 8)] = buildColorPaletteMap(this.#registerData.colorBgPalettes, paletteIdx - (paletteIdx % 8));
+                if(this.#registerData.colorBgPaletteIdx & 0x80){
+                    this.#registerData.colorBgPaletteIdx++;
+                }
+                break;
+            }
+            case 0xFF6A:
+                this.#registerData.colorObjPaletteIdx = val;
+                break;
+            case 0xFF6B:
+            {
+                const paletteIdx = this.#registerData.colorObjPaletteIdx & 0x3F;
+                this.#registerData.colorObjPalettes[paletteIdx] = val;
+                this.#registerData.colorObjPaletteMaps[Math.floor(paletteIdx / 8)] = buildColorPaletteMap(this.#registerData.colorObjPalettes, paletteIdx - (paletteIdx % 8));
+                if(this.#registerData.colorObjPaletteIdx & 0x80){
+                    this.#registerData.colorObjPaletteIdx++;
+                }
+                break;
+            }
+            case 0xFF6C:
+                this.#registerData.cgbOamPriority = val & 0x1;
+                break;
             default:
                 console.warn("Unhandled GPU register write", addr, val);
         }
@@ -204,19 +316,36 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
                 }
             }
         }
-        spritesForRow.sort((a, b) => a.x - b.x);
+        if(this.#registerData.cgbOamPriority || !this.#mmu.isColorMode()){
+            spritesForRow.sort((a, b) => a.x - b.x);
+        }
         return spritesForRow;
     }
-    #readTile(buffer : Uint8Array, bufferX: number, basePtr: number){
-        const b0 = this.#mmu.read(basePtr);
-        const b1 = this.#mmu.read(basePtr + 1);
-        for(let i = Math.max(0, -bufferX); i < 8 && (bufferX + i) < buffer.length; i++){
+    #readTile(buffer : Uint8Array, attrBuffer : Uint8Array, bufferX: number, basePtr: number, attrs : number){
+        const vramBank = (attrs & 0x08) >> 3;
+        const flipX = attrs & 0x20;
+        const b0 = this.#mmu.readVram(vramBank, basePtr);
+        const b1 = this.#mmu.readVram(vramBank, basePtr + 1);
+        /*for(let i = Math.max(0, -bufferX); i < 8 && (bufferX + i) < buffer.length; i++){
             const p0 = (b0 & (1 << (7 - i))) ? 1 : 0;
             const p1 = (b1 & (1 << (7 - i))) ? 2 : 0;
             buffer[bufferX + i] = p0 | p1;
+            attrBuffer[bufferX + i] = attrs;
+        }*/
+
+        
+        for(let readIdx = Math.max(0, -bufferX), writeIdx = 0; readIdx < 8 && (bufferX + writeIdx) < buffer.length; readIdx++, writeIdx++){
+            const readI = flipX ? readIdx : (7 - readIdx);
+            const p0 = (b0 & (1 << readI)) ? 1 : 0;
+            const p1 = (b1 & (1 << readI)) ? 2 : 0;
+            buffer[bufferX + writeIdx] = p0 | p1;
+            attrBuffer[bufferX + writeIdx] = attrs;
         }
+        
     }
-    #fillBgLayer(){        
+    #fillBgLayer(){   
+        const colorMode = this.#mmu.isColorMode();
+     
         const bgTileDataAddressingMode = (this.#registerData.control & 0x10) ? 1 : 0;
         const bgTileData = bgTileDataAddressingMode ? 0x8000 : 0x9000;
         const bgTileMap = (this.#registerData.control & 0x08) ? 0x9C00 : 0x9800;
@@ -224,23 +353,34 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
         const y = this.#registerData.y;
         const bgY = (y + this.#scanlineParams.scrollY) % 256;
         const buffer = this.#layerBuffers.bg;
+        const attrBuffer = this.#layerBuffers.bgFlags;
         buffer.fill(0);
+        attrBuffer.fill(0);
+        
         const xTileShift = this.#scanlineParams.scrollX % 8;
 
         for(let x = -xTileShift; x < screenW; x+=8){
             const xTileOffs = ((x + this.#scanlineParams.scrollX)%256);
-            let bgTileId = this.#mmu.read(bgTileMap + (32 * Math.floor(bgY/8)) + Math.floor(xTileOffs/8));
+            const tilePtr = bgTileMap + (32 * Math.floor(bgY/8)) + Math.floor(xTileOffs/8);
+            let bgTileId = this.#mmu.readVram(0, tilePtr);
+            const bgTileAttrs = colorMode ? this.#mmu.readVram(1, tilePtr) : 0;
             if(!bgTileDataAddressingMode){
                 bgTileId = uint8ToInt8(bgTileId);
             }
             const tileBase = bgTileData + (bgTileId * 16);
-            this.#readTile(buffer, x, tileBase + ((bgY % 8) * 2));
+            let yInTile = (bgY % 8);
+            if(bgTileAttrs & 0x40){
+                yInTile = 8 - yInTile;
+            }
+            this.#readTile(buffer, attrBuffer, x, tileBase + (yInTile * 2), bgTileAttrs);
         }
     }
     #fillWinLayer(){
         // window 0xFF for 'no window here'
-        
+        const colorMode = this.#mmu.isColorMode();
+
         const buffer = this.#layerBuffers.win;
+        const attrBuffer = this.#layerBuffers.winFlags;
 
         const windowX = this.#scanlineParams.windowX - 7;
 
@@ -263,15 +403,22 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             if(x < 0){
                 continue;
             }
-            let tileId = this.#mmu.read(tileMap + (32 * Math.floor(windowRenderY/8)) + Math.floor((x - windowX)/8));
+            const tilePtr = tileMap + (32 * Math.floor(windowRenderY/8)) + Math.floor((x - windowX)/8);
+            let tileId = this.#mmu.readVram(0, tilePtr);
+            const tileAttrs = colorMode ? this.#mmu.readVram(1, tilePtr) : 0;
             if(!tileDataAddressingMode){
                 tileId = uint8ToInt8(tileId);
             }
             const tileBase = tileData + (tileId * 16);
-            this.#readTile(buffer, x, tileBase + ((windowRenderY % 8) * 2));
+            let yInTile = (windowRenderY % 8);
+            if(tileAttrs & 0x40){
+                yInTile = 8 - yInTile;
+            }
+            this.#readTile(buffer, attrBuffer, x, tileBase + (yInTile * 2), tileAttrs);
         }
     }
     #fillSpriteLayer(){
+        const colorMode = this.#mmu.isColorMode();
         const y = this.#registerData.y;
         const buffer = this.#layerBuffers.obj;
         const flagBuffer = this.#layerBuffers.objFlags;
@@ -295,9 +442,10 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             }
             
             const tileBase = 0x8000 + (sprites[i].tileId * 16) + (yOfsInSprite * 2);
+            const vramBank = (sprites[i].flags & 0x08) >> 3;
 
-            const b0 = this.#mmu.read(tileBase);
-            const b1 = this.#mmu.read(tileBase + 1);
+            const b0 = this.#mmu.readVram(vramBank, tileBase);
+            const b1 = this.#mmu.readVram(vramBank, tileBase + 1);
             const startingX = x - sprites[i].x;
             const flipX = sprites[i].flags & 0x20;
             
@@ -309,14 +457,20 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
                 const p0 = (b0 & (1 << readI)) ? 1 : 0;
                 const p1 = (b1 & (1 << readI)) ? 2 : 0;
                 buffer[x + writeIdx] = p0 | p1;
-                flagBuffer[x + writeIdx] = sprites[i].flags;
+                if(colorMode){
+                    flagBuffer[x + writeIdx] = sprites[i].flags;
+                }else{
+                    flagBuffer[x + writeIdx] = (sprites[i].flags & 0xF0) | ((sprites[i].flags & 0x10) >> 4);
+                }
             }
         }
     }
     #draw(){
-        const bgEnabled = this.#registerData.control & 0x1;
-        const windowEnabled = (this.#registerData.control & 0x21) == 0x21;
-        const spritesEnabled = this.#registerData.control & 0x2;
+        const colorMode = this.#mmu.isColorMode();
+        const bgEnabled = colorMode || (this.#registerData.control & 0x1);
+        const windowMask = colorMode ? 0x20 : 0x21;
+        const windowEnabled = (this.#registerData.control & windowMask) === windowMask;
+        const spritesEnabled = (this.#registerData.control & 0x2);
 
         const y = this.#registerData.y;
         if(bgEnabled){
@@ -336,31 +490,43 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             this.#fillSpriteLayer();
         }
 
-        const bgPalette = this.#registerData.bgPaletteMap;
-        const spritePalette = [this.#registerData.obj0PaletteMap, this.#registerData.obj1PaletteMap];
+        //const bgPalette = this.#registerData.bgPaletteMap;
+        //const spritePalette = [this.#registerData.obj0PaletteMap, this.#registerData.obj1PaletteMap];
+
+        const bgPalettes = this.#registerData.colorBgPaletteMaps;
+        const spritePalettes = this.#registerData.colorObjPaletteMaps;
 
         const bgColours = (this.#debug.highlightBg ? altColours : colours);
         const winColours = (this.#debug.highlightWin ? altColours : colours);
         const spriteColours = (this.#debug.highlightSprite ? altColours : colours);
 
+        const masterPriorityEnabled = (this.#registerData.control & 0x1) || !colorMode;
+
         for(let x = 0; x < screenW; x++){
             const bgPix = this.#layerBuffers.bg[x];
+            const bgFlags = this.#layerBuffers.bgFlags[x];
             const winPix = this.#layerBuffers.win[x];
+            const winFlags = this.#layerBuffers.winFlags[x];
             const spritePix = this.#layerBuffers.obj[x];
             const spriteFlags = this.#layerBuffers.objFlags[x];
             let pixel = 0;
             if(spritesEnabled && spritePix){
-                if(spriteFlags & 0x80 && windowEnabled && winPix !== 0 && winPix !== 0xFF){
-                    pixel = winColours[bgPalette[winPix]];
-                } else if(spriteFlags & 0x80 && bgEnabled && bgPix !== 0){
-                    pixel = colours[bgPalette[bgPix]];
+                if(masterPriorityEnabled && ((spriteFlags & 0x80) || (winFlags & 0x80)) && windowEnabled && winPix !== 0 && winPix !== 0xFF){
+                    //pixel = winColours[bgPalette[winPix]];
+                    pixel = bgPalettes[winFlags & 0x7][winPix];
+                } else if(masterPriorityEnabled && ((spriteFlags & 0x80) || (bgFlags & 0x80)) && bgEnabled && bgPix !== 0){
+                    //pixel = colours[bgPalette[bgPix]];
+                    pixel = bgPalettes[bgFlags & 0x7][bgPix];
                 } else {
-                    pixel = spriteColours[spritePalette[(spriteFlags & 0x10) >> 4][spritePix]];
+                    //pixel = spriteColours[spritePalette[(spriteFlags & 0x10) >> 4][spritePix]];
+                    pixel = spritePalettes[spriteFlags & 0x7][spritePix];
                 }
             } else if(windowEnabled && winPix !== 0xFF){
-                pixel = winColours[bgPalette[winPix]];
+                //pixel = winColours[bgPalette[winPix]];
+                pixel = bgPalettes[winFlags & 0x7][winPix];
             } else if(bgEnabled) {
-                pixel = bgColours[bgPalette[bgPix]];
+                //pixel = bgColours[bgPalette[bgPix]];
+                pixel = bgPalettes[bgFlags & 0x7][bgPix];
             }
             this.#renderer.setPixel(x, pixel);
         }

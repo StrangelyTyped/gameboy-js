@@ -9,10 +9,11 @@ import { PersistenceFactory, RamPersistence } from "./persistence/ram-persistenc
 
 class MemoryBanks {
     bootRom = makeBuffer(0x100);
+    bootRom2 : Uint8Array | null = null;
     // rom / nvEram: additional banks provisioned when cartridge type set
     // 0xFF for open-bus until a cartridge is mapped
     rom = [makeBuffer(0x4000).fill(0xFF), makeBuffer(0x4000).fill(0xFF)];
-    vram = [ makeBuffer(0x2000)];
+    vram = [makeBuffer(0x2000), makeBuffer(0x2000)];
     nvEram = [makeBuffer(0x2000)];
     // CGB 8 banks
     wram = [makeBuffer(0x1000), makeBuffer(0x1000), makeBuffer(0x1000), makeBuffer(0x1000),
@@ -31,6 +32,7 @@ export default class MMU implements Memory {
     #mbc : MBC = new RomOnlyMbc(); // Will overrite with real one before it gets used
     #romBankCount = 2;
     #ramBankCount = 1;
+    #colorMode = true;
 
     #ppu : MemoryMappable | null = null;
     #joypad : MemoryMappable | null = null;
@@ -42,12 +44,20 @@ export default class MMU implements Memory {
         this.setCartridgeType(0, 0, 0);
     }
 
+    readVram(bank : number, addr : number){
+        return this.#banks.vram[bank][addr - 0x8000];;
+    }
+
     read(addr : number){
         addr &= 0xFFFF;
         switch(addr & 0xF000){
             case 0x0000:
-                if(addr < 0x100 && this.#activeBanks.boot){
-                    return this.#banks.bootRom[addr];
+                if(this.#activeBanks.boot){
+                    if(addr < 0x100){
+                        return this.#banks.bootRom[addr];
+                    } else if (this.#banks.bootRom2 !== null && addr >= 0x200 && addr < 0x900){
+                        return this.#banks.bootRom2[addr - 0x200];
+                    }
                 }
             case 0x1000:
             case 0x2000:
@@ -87,7 +97,7 @@ export default class MMU implements Memory {
                             if(addr === 0xFF0F){
                                 // interrupt flag register
                                 return this.#banks.interruptFlagRegister;
-                            } else if(addr >= 0xFF40 && addr <= 0xFF4B){
+                            } else if((addr >= 0xFF40 && addr <= 0xFF4B) || (addr >= 0xFF51 && addr <= 0xFF55) || (addr >= 0xFF68 && addr <= 0xFF6C)){
                                 if(this.#ppu){
                                     return this.#ppu.readRegister(addr);
                                 }
@@ -115,6 +125,14 @@ export default class MMU implements Memory {
                                     return this.#joypad.readRegister(addr);
                                 }
                                 return 0x8;
+                            } else if(addr == 0xFF4F){
+                                if(this.isColorMode()){
+                                    return this.#activeBanks.vram | 0xFE;
+                                }
+                            } else if(addr == 0xFF70){
+                                if(this.isColorMode()){
+                                    return this.#activeBanks.wram2;
+                                }
                             } else if(addr === 0xFF7F){
                                 // No idea what this is - not documented
                             } else{
@@ -173,7 +191,7 @@ export default class MMU implements Memory {
                             this.#banks.hram[addr - 0xFF80] = val;
                         }else{
                             //IO Registers
-                            if(addr >= 0xFF40 && addr <= 0xFF4B){
+                            if((addr >= 0xFF40 && addr <= 0xFF4B) || (addr >= 0xFF51 && addr <= 0xFF55) || (addr >= 0xFF68 && addr <= 0xFF6C)){
                                 if(this.#ppu){
                                     this.#ppu.writeRegister(addr, val);
                                 }
@@ -182,6 +200,8 @@ export default class MMU implements Memory {
                                 if(this.#audio){
                                     this.#audio.writeRegister(addr, val);
                                 }
+                            } else if(addr === 0xFF4C){
+                                this.#colorMode = (val & 0x80) !== 0;
                             } else if(addr === 0xFF0F){
                                 // interrupt flag register
                                 this.#banks.interruptFlagRegister = val;
@@ -198,6 +218,14 @@ export default class MMU implements Memory {
                                 // joypad
                                 if(this.#joypad){
                                     this.#joypad.writeRegister(addr, val);
+                                }
+                            } else if(addr == 0xFF4F){
+                                if(this.isColorMode()){
+                                    this.#activeBanks.vram = (val & 0x1);
+                                }
+                            } else if(addr == 0xFF70){
+                                if(this.isColorMode()){
+                                    this.#activeBanks.wram2 = (val & 0x7) || 1;
                                 }
                             } else if(addr === 0xFF50){
                                 console.warn("Boot rom unmap");
@@ -317,6 +345,10 @@ export default class MMU implements Memory {
         this.write(addr, val & 0xFF);
         this.write(addr + 1, (val & 0xFF00) >> 8);
     }
+
+    isColorMode() : boolean {
+        return this.#colorMode;
+    }
     
     mapRomBank(index : number, data : ArrayLike<number>){
         const bank = makeBuffer(0x4000);
@@ -327,7 +359,16 @@ export default class MMU implements Memory {
         this.#banks.rom[index] = bank;
     }
     mapBootRom(data : ArrayLike<number>){
-        this.#banks.bootRom.set(data, 0);
+        if(data.length > 0x100){
+            if(data.length !== 0x900){
+                console.warn("Unexpected Boot ROM size, expected 2304 bytes, got", data.length);
+            }
+            this.#banks.bootRom2 = makeBuffer(0x700).fill(0xFF);
+            this.#banks.bootRom2.set(Array.prototype.slice.call(data, 0x200, 0x900), 0);
+        }else if(data.length !== 0x100){
+            console.warn("Unexpected Boot ROM size, expected 256 bytes, got", data.length);
+        }
+        this.#banks.bootRom.set(Array.prototype.slice.call(data, 0, 0x100), 0);
         this.#activeBanks.boot = true;
     }
     loadCartridge(data : ArrayLike<number>){

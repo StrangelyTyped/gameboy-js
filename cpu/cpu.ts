@@ -550,6 +550,13 @@ function tick(cpuState : CPUState, registers : Registers, mmu : Memory){
             break;
         }
         // case stop
+        case PrimaryGroupNames.stop:
+        {
+            //TODO
+            console.warn("CPU Stop");
+            cpuState.awaitingInterrupt = true;
+            break;
+        }
         case PrimaryGroupNames.rotateLeftCarry: // RLA
         {
             const prev = registers.A;
@@ -1052,7 +1059,7 @@ function tick(cpuState : CPUState, registers : Registers, mmu : Memory){
             }
             break;
         case PrimaryGroupNames.extendedOpcode:
-            cycleIncrement += extendedTick(registers, mmu);
+            cycleIncrement = extendedTick(registers, mmu);
             break;
         case PrimaryGroupNames.callImmediate16:
         {
@@ -1236,10 +1243,10 @@ export default class CPU {
     }
 
     #notifyInterrupt(interruptMask : number){
-        if(this.#mmu.read(0xFFFF) & interruptMask){
+        //if(this.#mmu.read(0xFFFF) & interruptMask){
             this.#mmu.write(0xFF0F, this.#mmu.read(0xFF0F) | interruptMask);
             this.#cpuState.awaitingInterrupt = false;
-        }
+        //}
     }
 
     registerGpuCallbacks(gpu : PixelProcessingUnit){
