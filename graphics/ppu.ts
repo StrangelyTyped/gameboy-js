@@ -44,6 +44,10 @@ const defaultColorPaletteMap = [
     0x000000,
 ];
 
+const colorModePaletteMap = [
+    0, 1, 2, 3
+];
+
 const colorFactor = 0xFF/0x1F;
 function gbcColorToRgb(colorLo : number, colorHi : number){
     const r = colorLo & 0x1F;
@@ -499,9 +503,8 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
         const bgPalettes = this.#registerData.colorBgPaletteMaps;
         const spritePalettes = this.#registerData.colorObjPaletteMaps;
 
-        const bgColours = (this.#debug.highlightBg ? altColours : colours);
-        const winColours = (this.#debug.highlightWin ? altColours : colours);
-        const spriteColours = (this.#debug.highlightSprite ? altColours : colours);
+        const bgMap = colorMode ? colorModePaletteMap : this.#registerData.bgPaletteMap;
+        const spriteMap = colorMode ? [colorModePaletteMap, colorModePaletteMap] : [this.#registerData.obj0PaletteMap, this.#registerData.obj1PaletteMap];
 
         const masterPriorityEnabled = (this.#registerData.control & 0x1) || !colorMode;
 
@@ -516,20 +519,20 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             if(spritesEnabled && spritePix){
                 if(masterPriorityEnabled && ((spriteFlags & 0x80) || (winFlags & 0x80)) && windowEnabled && winPix !== 0 && winPix !== 0xFF){
                     //pixel = winColours[bgPalette[winPix]];
-                    pixel = bgPalettes[winFlags & 0x7][winPix];
+                    pixel = bgPalettes[winFlags & 0x7][bgMap[winPix]];
                 } else if(masterPriorityEnabled && ((spriteFlags & 0x80) || (bgFlags & 0x80)) && bgEnabled && bgPix !== 0){
                     //pixel = colours[bgPalette[bgPix]];
-                    pixel = bgPalettes[bgFlags & 0x7][bgPix];
+                    pixel = bgPalettes[bgFlags & 0x7][bgMap[bgPix]];
                 } else {
                     //pixel = spriteColours[spritePalette[(spriteFlags & 0x10) >> 4][spritePix]];
-                    pixel = spritePalettes[spriteFlags & 0x7][spritePix];
+                    pixel = spritePalettes[spriteFlags & 0x7][spriteMap[(spriteFlags & 0x10) >> 4][spritePix]];
                 }
             } else if(windowEnabled && winPix !== 0xFF){
                 //pixel = winColours[bgPalette[winPix]];
-                pixel = bgPalettes[winFlags & 0x7][winPix];
+                pixel = bgPalettes[winFlags & 0x7][bgMap[winPix]];
             } else if(bgEnabled) {
                 //pixel = bgColours[bgPalette[bgPix]];
-                pixel = bgPalettes[bgFlags & 0x7][bgPix];
+                pixel = bgPalettes[bgFlags & 0x7][bgMap[bgPix]];
             }
             this.#renderer.setPixel(x, pixel);
         }
