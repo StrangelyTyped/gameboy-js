@@ -334,7 +334,10 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
         }*/
 
         
-        for(let readIdx = Math.max(0, -bufferX), writeIdx = 0; readIdx < 8 && (bufferX + writeIdx) < buffer.length; readIdx++, writeIdx++){
+        for(let readIdx = 0, writeIdx = 0; readIdx < 8 && (bufferX + writeIdx) < buffer.length; readIdx++, writeIdx++){
+            if(bufferX + writeIdx < 0){
+                continue;
+            }
             const readI = flipX ? readIdx : (7 - readIdx);
             const p0 = (b0 & (1 << readI)) ? 1 : 0;
             const p1 = (b1 & (1 << readI)) ? 2 : 0;
