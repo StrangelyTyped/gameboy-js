@@ -9,6 +9,7 @@ import PixelProcessingUnit from "./graphics/ppu.js";
 import CanvasRenderer from "./graphics/canvas-renderer.js";
 
 import CPU from "./cpu/cpu.js";
+import SpeedManager from "./cpu/speed-mgr.js";
 
 import { FpsCounter, loadBlob } from "./utils.js"
 import VRamDebugDisplay from "./graphics/vram-debug-display.js";
@@ -28,7 +29,10 @@ if(params.has("bootrom")){
 async function initialize(){
     const mmu = new MMU(LocalStorageRamPersistence);
     const cpuRegisters = new Registers();
-    const cpu = new CPU(mmu, cpuRegisters);
+    const cpuSpeedManager = new SpeedManager();
+    const cpu = new CPU(mmu, cpuRegisters, cpuSpeedManager);
+
+    mmu.mapSpeedManager(cpuSpeedManager);
 
     const rom = await loadBlob(romPath);
     mmu.loadCartridge(rom);
@@ -95,11 +99,12 @@ async function initialize(){
         let targetCycles = 4194.304 * Math.min(32, elapsed);
         while(waitingForVsync && targetCycles > 0){
             const simulatedCycles = cpu.tick();
-            ppu.tick(simulatedCycles);
+            const singleSpeedCycles = simulatedCycles / cpuSpeedManager.modifier();
+            ppu.tick(singleSpeedCycles);
             timer.tick(simulatedCycles);
             serial.tick(simulatedCycles);
-            audio.tick(simulatedCycles);
-            targetCycles -= simulatedCycles;
+            audio.tick(singleSpeedCycles);
+            targetCycles -= singleSpeedCycles;
         }
 
         const rtElapsed = performance.now() - tickStart;
@@ -111,10 +116,10 @@ async function initialize(){
     beginButton.addEventListener("click", async () => {
         if(!initialised){
             initialised = true;
-        await audio.initialize();
-        mmu.mapAudio(audio);
+            await audio.initialize();
+            mmu.mapAudio(audio);
 
-        requestAnimationFrame(run);
+            requestAnimationFrame(run);
         } else {
             paused = !paused;
         }

@@ -2,6 +2,7 @@ import {readString, makeBuffer, MemoryMappable} from "../utils.js";
 import MBC from "./mbc/mbc.js";
 import MBC1 from "./mbc/mbc1.js";
 import MBC3 from "./mbc/mbc3.js";
+import MBC5 from "./mbc/mbc5.js";
 import RomOnlyMbc from "./mbc/rom-only-mbc.js";
 import Memory from "./memory.js";
 import MMUBankMapping from "./mmu-bank-mapping.js";
@@ -18,8 +19,8 @@ class MemoryBanks {
     // CGB 8 banks
     wram = [makeBuffer(0x1000), makeBuffer(0x1000), makeBuffer(0x1000), makeBuffer(0x1000),
             makeBuffer(0x1000), makeBuffer(0x1000), makeBuffer(0x1000), makeBuffer(0x1000)];
-    oam = makeBuffer(0x9F);
-    hram = makeBuffer(0x7E);
+    oam = makeBuffer(0x100);
+    hram = makeBuffer(0x7F);
     interruptFlagRegister = 0;
     interruptEnableRegister = 0;
 }
@@ -39,6 +40,8 @@ export default class MMU implements Memory {
     #timer : MemoryMappable | null = null;
     #serial : MemoryMappable | null = null;
     #audio : MemoryMappable | null = null;
+    #speedManager : MemoryMappable | null = null;
+
     constructor(persistenceFactory : PersistenceFactory){
         this.#persistenceFactory = persistenceFactory;
         this.setCartridgeType(0, 0, 0);
@@ -125,11 +128,15 @@ export default class MMU implements Memory {
                                     return this.#joypad.readRegister(addr);
                                 }
                                 return 0x8;
-                            } else if(addr == 0xFF4F){
+                            } else if(addr === 0xFF4F){
                                 if(this.isColorMode()){
                                     return this.#activeBanks.vram | 0xFE;
                                 }
-                            } else if(addr == 0xFF70){
+                            } else if(addr === 0xFF4D){
+                                if(this.isColorMode() && this.#speedManager){
+                                    return this.#speedManager.readRegister(addr);
+                                }
+                            } else if(addr === 0xFF70){
                                 if(this.isColorMode()){
                                     return this.#activeBanks.wram2;
                                 }
@@ -219,11 +226,15 @@ export default class MMU implements Memory {
                                 if(this.#joypad){
                                     this.#joypad.writeRegister(addr, val);
                                 }
-                            } else if(addr == 0xFF4F){
+                            } else if(addr === 0xFF4F){
                                 if(this.isColorMode()){
                                     this.#activeBanks.vram = (val & 0x1);
                                 }
-                            } else if(addr == 0xFF70){
+                            } else if(addr === 0xFF4D){
+                                if(this.isColorMode() && this.#speedManager){
+                                    this.#speedManager.writeRegister(addr, val);
+                                }
+                            } else if(addr === 0xFF70){
                                 if(this.isColorMode()){
                                     this.#activeBanks.wram2 = (val & 0x7) || 1;
                                 }
@@ -316,6 +327,17 @@ export default class MMU implements Memory {
                 this.#mbc = new MBC3(this.#activeBanks, this.#romBankCount, this.#ramBankCount, saveRam, hasRtc);
                 break;
             }
+	    case 0x19:
+	    case 0x1A:
+	    case 0x1B:
+	    case 0x1C:
+	    case 0x1D:
+	    case 0x1E:
+            {
+                hasPersistentRam = (cartTypeId === 0x1B || cartTypeId === 0x1E);
+                this.#mbc = new MBC5(this.#activeBanks, this.#romBankCount, this.#ramBankCount, saveRam);
+                break;
+            }
             default:
                 console.warn("Unimplemented MBC type", cartTypeId);
                 //this.#mbc = new RomOnlyMbc(this.#activeBanks);
@@ -390,5 +412,8 @@ export default class MMU implements Memory {
     }
     mapAudio(audio : MemoryMappable){
         this.#audio = audio;
+    }
+    mapSpeedManager(speedManager : MemoryMappable){
+        this.#speedManager = speedManager;
     }
 }

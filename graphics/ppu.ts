@@ -20,6 +20,7 @@ const screenScanW = 170;
 const screenScanH = 154;
 const screenW = 160;
 const screenH = 144;
+let debugLog = false;
 
 enum PPUMode {
     MODE_SEARCH_OAM = 2,
@@ -256,7 +257,7 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             {
                 if(val & 0x80){
                     console.warn("Hblank HDMA invoked, unimplemented");
-                    return;
+                    //return;
                 }
                 const length = ((val & 0x7F) + 1) * 0x10;
                 for(let i = 0; i < length; i++){
@@ -515,7 +516,7 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
             const winFlags = this.#layerBuffers.winFlags[x];
             const spritePix = this.#layerBuffers.obj[x];
             const spriteFlags = this.#layerBuffers.objFlags[x];
-            let pixel = 0;
+            let pixel = 0xFFFFFF;
             if(spritesEnabled && spritePix){
                 if(masterPriorityEnabled && ((spriteFlags & 0x80) || (winFlags & 0x80)) && windowEnabled && winPix !== 0 && winPix !== 0xFF){
                     //pixel = winColours[bgPalette[winPix]];
@@ -602,6 +603,7 @@ export default class PixelProcessingUnit implements MemoryMappable, Clocked {
     #incrementY(){
         this.#registerData.y++;
         if(this.#registerData.y === this.#registerData.yCompare){
+            if(debugLog){ console.log("Lyc", this.#registerData.y, this.#registerData.yCompare)}
             const lycInterruptEnabled = (this.#registerData.interruptFlags & 0x40) > 0;
             this.#callbacks.lyc.forEach(cb => cb(lycInterruptEnabled));
         }

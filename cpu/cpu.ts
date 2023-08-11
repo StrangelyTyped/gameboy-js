@@ -6,6 +6,7 @@ import Timer from "../timer.js";
 import { uint8ToInt8 } from "../utils.js";
 import {primaryGroups, PrimaryGroupNames, extendedGroups, ExtendedGroupNames} from "./cpu-opcodes.js";
 import Registers, { RegisterNames } from "./cpu-registers.js";
+import SpeedManager from "./speed-mgr.js";
 
 const standardOpcodeRegisterMappingLow3 = [
     RegisterNames.B,
@@ -33,6 +34,7 @@ const standardOpcodeRegisterMappingMid3 = [
         RegisterNames.A
     ]
 ]
+
 function getStandardRegisterMid3(opcode : number){
     return standardOpcodeRegisterMappingMid3[(opcode & 0x8) >> 3][(opcode & 0x30) >> 4];
 }
@@ -297,10 +299,10 @@ function extendedTick(registers : Registers, mmu : Memory){
 }
 
 
-function tick(cpuState : CPUState, registers : Registers, mmu : Memory){
-    const interrupts = mmu.read(0xFF0F);
+function tick(cpuState : CPUState, registers : Registers, mmu : Memory, speedManager : SpeedManager){
+    const interrupts = mmu.read(0xFF0F) & mmu.read(0xFFFF);
     // service interrupts
-    if(cpuState.interruptsEnabled && mmu.read(0xFFFF) && (interrupts & 0x1F)){
+    if(cpuState.interruptsEnabled && (interrupts & 0x1F)){
         cpuState.awaitingInterrupt = false;
         cpuState.interruptsEnabled = false;
         let jumpTarget = 0;
@@ -552,9 +554,9 @@ function tick(cpuState : CPUState, registers : Registers, mmu : Memory){
         // case stop
         case PrimaryGroupNames.stop:
         {
-            //TODO
             console.warn("CPU Stop");
-            cpuState.awaitingInterrupt = true;
+            speedManager.stop();
+            //cpuState.awaitingInterrupt = true;
             break;
         }
         case PrimaryGroupNames.rotateLeftCarry: // RLA
@@ -1232,14 +1234,16 @@ class CPUState {
 export default class CPU {
     #cpuState = new CPUState();
     #registers;
+    #speedManager;
     #mmu;
-    constructor(mmu : Memory, registers : Registers){
+    constructor(mmu : Memory, registers : Registers, speedManager : SpeedManager){
         this.#mmu = mmu;
         this.#registers = registers;
+        this.#speedManager = speedManager;
     }
     
     tick(){
-        return tick(this.#cpuState, this.#registers, this.#mmu);
+        return tick(this.#cpuState, this.#registers, this.#mmu, this.#speedManager);
     }
 
     #notifyInterrupt(interruptMask : number){

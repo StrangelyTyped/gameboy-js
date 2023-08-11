@@ -2,21 +2,27 @@ import { getBankMask } from "../../utils.js";
 import MMUBankMapping from "../mmu-bank-mapping.js";
 import MBC, { MBCSaveRAMCallback } from "./mbc.js";
 
-export default class MBC3 implements MBC {
+export default class MBC5 implements MBC{
     #activeBanks;
     #registers = {
         ramEnable: 0,
-        romBankNo: 1,
-        ramBankNo: 0,
+        romBankNoLow: 1,
+	romBankNoHigh: 0,
+	ramBankNo: 0,
     };
     #romBankCount;
     #ramBankCount;
     #saveRamFunc;
-    constructor(activeBanks : MMUBankMapping, romBanks : number, ramBanks : number, saveRamFunc : MBCSaveRAMCallback, hasRtc : boolean){
+    constructor(activeBanks : MMUBankMapping, romBanks : number, ramBanks : number, saveRamFunc : MBCSaveRAMCallback){
         this.#activeBanks = activeBanks;
         this.#romBankCount = romBanks;
         this.#ramBankCount = ramBanks;
         this.#saveRamFunc = saveRamFunc;
+    }
+    #setBanks(){
+        this.#activeBanks.rom2 = (this.#registers.romBankNoLow | (this.#registers.romBankNoHigh << 8)) & getBankMask(this.#romBankCount);
+        this.#activeBanks.rom = 0;
+        this.#activeBanks.nvEram = this.#registers.ramBankNo & getBankMask(this.#ramBankCount);
     }
     romWrite(addr : number, val : number){
         switch(addr & 0xF000){
@@ -29,23 +35,18 @@ export default class MBC3 implements MBC {
                 }
                 break;
             case 0x2000:
+		this.#registers.romBankNoLow = (val & 0xFF);
+	        this.#setBanks();
+		break;
             case 0x3000:
-                //ROM Bank no
-                this.#registers.romBankNo = (val & 0xFF) || 0x1;
-                this.#activeBanks.rom2 = this.#registers.romBankNo & getBankMask(this.#romBankCount);
+                this.#registers.romBankNoHigh = (val & 0x1);
+                this.#setBanks();
                 break;
             case 0x4000:
             case 0x5000:
-                // RAM bank no / RTC register select
-	        if(val > 0x3){
-		    console.warn("MBC3 invoking RTC map")
-		}
-                this.#registers.ramBankNo = (val & 0x3);
-                this.#activeBanks.nvEram = this.#registers.ramBankNo & getBankMask(this.#ramBankCount);
-                break;
-            case 0x6000:
-            case 0x7000:
-                // RTC latch
+                // RAM bank no / upper bits of ROM bank no
+                this.#registers.ramBankNo = (val & 0xF);
+                this.#setBanks();
                 break;
         }
         return val;
